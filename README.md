@@ -153,6 +153,12 @@ declined and returns `.failed`.
 | `.unconfirmed` | The flow ended and Hesabe could not be asked. | The customer may have been charged. Check from your server. |
 | `.notStarted` | The session was refused or the page never loaded. | Nothing was charged. Create a new session. |
 
+`.paid`, `.cardSaved`, `.failed` and `.pending` carry Hesabe's record of the payment as a
+`HesabeTransaction`: the status, amount, order reference, payment and transaction ids,
+track id, terminal and Hesabe's own date. Its `rawJSON` is the whole record for a
+developer to read. It includes the customer's name, email and mobile number, so keep it
+out of logs.
+
 ## Step 5. Add the Apple Pay button
 
 ```swift
@@ -315,6 +321,7 @@ Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
 |---|---|
 | `Hesabe/HesabeSession.swift` | Holds the session's `data`. Unwraps an embedded session. |
 | `Hesabe/HesabeClient.swift` | The keyless calls: session details, payment page and card form addresses, outcome. |
+| `Hesabe/HesabeTransaction.swift` | A payment as Hesabe recorded it, and the seven results. |
 | `HesabeUI/HesabeCheckoutSheet.swift` | Reads the session, shows the method list, the card form or the page, settles the result. |
 | `HesabeUI/PaymentWebViewController.swift` | Hesabe's page or card form in a web view: bank app hand-off, 3-D Secure popups, return detection. |
 | `HesabeUI/StatusView.swift` | What the sheet shows between pages: a loader with a line of text, the settled result, a failure with "Try again". |

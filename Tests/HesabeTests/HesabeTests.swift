@@ -135,6 +135,25 @@ final class HesabeTests: XCTestCase {
         ])
     }
 
+    func testATransactionKeepsHesabesWholeRecord() async throws {
+        let attempts = try await client([(200, try fixture("enquiry-paid"))])
+            .transactions(token: "84221700000000000000000000001")
+        let transaction = try XCTUnwrap(attempts.first)
+
+        XCTAssertEqual(transaction.trackID, "300001")
+        XCTAssertEqual(transaction.terminal, "000001")
+        // The sandbox fills the card fields of a KNET payment with "-NA-".
+        XCTAssertNil(transaction.cardType)
+        XCTAssertNil(transaction.maskedCard)
+        // Fields the SDK has no name for are still in the record.
+        XCTAssertTrue(transaction.rawJSON.contains("service_type"))
+        XCTAssertTrue(transaction.rawJSON.contains("Payment Gateway"))
+
+        // Stored and read again, it is the same transaction.
+        let stored = try JSONEncoder().encode(transaction)
+        XCTAssertEqual(try JSONDecoder().decode(HesabeTransaction.self, from: stored), transaction)
+    }
+
     func testSettleWaitsForHesabeToRecordThePayment() async throws {
         let log = RequestLog()
         let notFound = (404, try fixture("enquiry-not-found"))
