@@ -1,93 +1,212 @@
 import HesabeUI
 import SwiftUI
 
-/// One product, a quantity, and every way of paying for it the SDK offers.
+/// Where the navigation stack goes from the home screen.
+enum Route: Hashable {
+    case result(PaymentRecord.ID)
+    case history
+}
+
+/// One product, a quantity, and every way of paying for it the SDK offers. Every
+/// payment ends on `ResultView`, and every result stays in the payment history.
 @MainActor
 struct CheckoutView: View {
+    /// What the home screen is waiting for. It puts the spinner on the control that was
+    /// tapped and keeps every other control from starting a second payment.
+    private enum Busy: Equatable {
+        /// From the tap on a pay button until that payment has a result.
+        case paying(PaymentRecord.Flow)
+        case charging(HesabeSavedCard.ID)
+        case removing(HesabeSavedCard.ID)
+    }
+
+    /// The payment in the checkout sheet: the order the server created, and how it was
+    /// started.
+    private struct Attempt {
+        let order: Backend.Order
+        let flow: PaymentRecord.Flow
+    }
+
+    /// A step that failed before any payment existed, and how to run it again.
+    private struct Failure {
+        let title: String
+        let message: String
+        let retry: () -> Void
+    }
+
     private let backend = Backend(baseURL: Config.backend)
+
+    @State private var path: [Route] = []
+    @State private var history = PaymentHistory.load()
+    /// The payments Hesabe is being asked about right now.
+    @State private var checking: Set<PaymentRecord.ID> = []
 
     @State private var quantity = 1
     /// Asks the server for a session whose card form offers to save the card.
     @State private var offersCardSaving = false
+    @State private var busy: Busy?
+    @State private var failure: Failure?
+
+    @State private var attempt: Attempt?
     /// The session the checkout sheet is paying. Non-nil presents the sheet.
     @State private var sheetSession: HesabeSession?
-    @State private var sheetMethods: [PaymentMethod] = []
-    /// The session behind the Apple Pay button. A session is single use, so the button
+
+    /// The order behind the Apple Pay button. A session is single use, so the button
     /// gets a new one whenever the quantity changes or a payment ends.
-    @State private var applePaySession: HesabeSession?
+    @State private var applePayOrder: Backend.Order?
     @State private var applePayRound = 0
-    /// The customer's saved cards, as the server lists them.
-    @State private var cards: [HesabeSavedCard] = []
+
+    /// The customer's saved cards, as the server lists them. `nil` until it answers.
+    @State private var cards: [HesabeSavedCard]?
+    @State private var cardsError: String?
     /// The saved card the customer is being asked to confirm a charge on.
     @State private var cardToCharge: HesabeSavedCard?
-    @State private var isBusy = false
-    @State private var outcome: Outcome?
+    /// The saved card the customer is being asked to confirm the removal of.
+    @State private var cardToRemove: HesabeSavedCard?
 
     private var total: Decimal { Config.unitPrice * Decimal(quantity) }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section("Your order") {
                     Stepper("Sticker pack × \(quantity)", value: $quantity, in: 1...20)
                     LabeledContent("Total", value: "KWD \(hesabeAmount(total))")
                 }
+                .disabled(busy != nil)
 
                 Section {
                     if Config.applePayPage != nil {
                         applePayButton
                     }
-                    Button("Choose a method") { pay(with: [.knet, .card, .amex]) }
-                    Button("KNET") { pay(with: [.knet]) }
-                    Button("Card") { pay(with: [.card]) }
-                    Button("Hesabe's page, every method") { pay(with: []) }
+                    payButton("Choose a method", methods: [.knet, .card, .amex])
+                    payButton("KNET", methods: [.knet])
+                    payButton("Card", methods: [.card])
+                    payButton(
+                        "Indirect Method", methods: [],
+                        caption: "Opens Hesabe's hosted payment page, where the customer chooses the method.")
                     Toggle("Offer to save the card", isOn: $offersCardSaving)
                 } header: {
                     Text("Pay")
                 } footer: {
                     Text("A card is entered in Hesabe's card form, inside the app.")
                 }
-                .disabled(isBusy)
+                .disabled(busy != nil)
+
+                SavedCardsSection(
+                    cards: cards, loadError: cardsError, busyCard: busyCard,
+                    isAdding: busy == .paying(.addCard),
+                    onPay: { cardToCharge = $0 },
+                    onRemove: { cardToRemove = $0 },
+                    onAdd: { start(.addCard) },
+                    onReload: { Task { await loadCards() } }
+                )
+                .disabled(busy != nil)
 
                 Section {
-                    ForEach(cards) { card in
-                        Button { cardToCharge = card } label: { SavedCardRow(card: card) }
-                            .swipeActions {
-                                Button("Remove", role: .destructive) { remove(card) }
-                            }
-                    }
-                    Button("Add a card") { addCard() }
-                } header: {
-                    Text("Saved cards")
-                } footer: {
-                    Text("Tap a card to pay with it. The server charges it: no page, no 3-D Secure.")
-                }
-                .disabled(isBusy)
-
-                if let outcome {
-                    Section("Result") {
-                        Label(outcome.title, systemImage: outcome.symbol)
-                            .foregroundStyle(outcome.succeeded ? Color.green : Color.primary)
-                        Text(outcome.detail)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    NavigationLink(value: Route.history) {
+                        LabeledContent("Payment history", value: "\(history.records.count)")
                     }
                 }
             }
             .navigationTitle("Hesabe Demo")
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .history:
+                    HistoryView(records: history.records) { history.clear() }
+                case .result(let id):
+                    if let record = history[id] {
+                        ResultView(
+                            record: record, isChecking: checking.contains(id),
+                            onRetry: retry(record),
+                            onCheckAgain: record.token == nil ? nil : { checkAgain(id) })
+                    }
+                }
+            }
         }
-        .hesabeCheckout(session: $sheetSession, configuration: Config.hesabe, methods: sheetMethods) { result in
-            Task { await show(result) }
+        .hesabeCheckout(
+            session: $sheetSession, configuration: Config.hesabe, methods: attempt?.flow.methods ?? []
+        ) { result in
+            finish(result)
         }
         .confirmationDialog(
-            "Pay KWD \(hesabeAmount(total))?", isPresented: isConfirmingCharge,
-            titleVisibility: .visible, presenting: cardToCharge
+            chargeQuestion, isPresented: isPresenting($cardToCharge), titleVisibility: .visible,
+            presenting: cardToCharge
         ) { card in
-            Button("Pay with \(card.displayName)") { charge(card) }
+            Button("Pay") { charge(card) }
         }
+        .confirmationDialog(
+            removalQuestion, isPresented: isPresenting($cardToRemove), titleVisibility: .visible,
+            presenting: cardToRemove
+        ) { card in
+            Button("Remove card", role: .destructive) { remove(card) }
+        }
+        .alert(failure?.title ?? "", isPresented: isPresenting($failure), presenting: failure) { failure in
+            Button("Try again") { failure.retry() }
+            Button("Cancel", role: .cancel) {}
+        } message: { failure in
+            Text(failure.message)
+        }
+        .task { await recover() }
         .task { await loadCards() }
         .task(id: ApplePayKey(quantity: quantity, round: applePayRound)) {
             await prepareApplePay()
+        }
+    }
+
+    /// True while `item` holds a value. Dismissing clears the value.
+    private func isPresenting<Item>(_ item: Binding<Item?>) -> Binding<Bool> {
+        Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
+    }
+
+    // MARK: - Checkout sheet
+
+    private func payButton(_ title: String, methods: [PaymentMethod], caption: String? = nil) -> some View {
+        let flow = PaymentRecord.Flow.checkout(methods: methods)
+        return PayButton(title: title, caption: caption, isBusy: busy == .paying(flow)) { start(flow) }
+    }
+
+    /// Asks the server for a session and hands it to the checkout sheet. The spinner is
+    /// on the button from the tap until the payment has a result, so no payment can be
+    /// started twice.
+    private func start(_ flow: PaymentRecord.Flow) {
+        busy = .paying(flow)
+        Task {
+            do {
+                // "Add a card" is a session with amount 0.000: the sheet shows the card
+                // form and saves the card.
+                let order = try await (flow == .addCard
+                    ? backend.createCardSession()
+                    : backend.createSession(quantity: quantity, saveCard: offersCardSaving))
+                attempt = Attempt(order: order, flow: flow)
+                sheetSession = order.session
+            } catch {
+                busy = nil
+                failure = Failure(title: "Could not start the payment", message: error.localizedDescription) {
+                    start(flow)
+                }
+            }
+        }
+    }
+
+    private func finish(_ result: PaymentResult) {
+        busy = nil
+        guard let attempt else { return }
+        self.attempt = nil
+        show(PaymentRecord(result, flow: attempt.flow, order: attempt.order))
+    }
+
+    /// A payment that did not go through starts again with a new session: a session is
+    /// single use. Apple Pay and a saved card start again from the home screen.
+    private func retry(_ record: PaymentRecord) -> (() -> Void)? {
+        switch record.flow {
+        case .checkout, .addCard:
+            return {
+                path = []
+                start(record.flow)
+            }
+        case .applePay, .savedCard, .recovered:
+            return nil
         }
     }
 
@@ -95,16 +214,14 @@ struct CheckoutView: View {
 
     @ViewBuilder
     private var applePayButton: some View {
-        if let applePaySession {
+        if let applePayOrder {
             HesabeApplePayButton(
-                session: applePaySession, configuration: Config.hesabe, method: Config.applePayMethod
+                session: applePayOrder.session, configuration: Config.hesabe, method: Config.applePayMethod
             ) { result in
-                Task {
-                    await show(result)
-                    applePayRound += 1
-                }
+                show(PaymentRecord(result, flow: .applePay, order: applePayOrder))
+                applePayRound += 1
             }
-            .id(applePaySession)
+            .id(applePayOrder.token)
             .listRowInsets(EdgeInsets())
         } else {
             ProgressView()
@@ -119,204 +236,140 @@ struct CheckoutView: View {
 
     private func prepareApplePay() async {
         guard Config.applePayPage != nil else { return }
-        applePaySession = nil
+        applePayOrder = nil
         do {
-            let session = try await backend.createSession(quantity: quantity)
-            if !Task.isCancelled { applePaySession = session }
+            let order = try await backend.createSession(quantity: quantity)
+            if !Task.isCancelled { applePayOrder = order }
         } catch {
-            if !Task.isCancelled { outcome = Outcome(error) }
-        }
-    }
-
-    // MARK: - Checkout sheet
-
-    private func pay(with methods: [PaymentMethod]) {
-        present(methods: methods) {
-            try await backend.createSession(quantity: quantity, saveCard: offersCardSaving)
-        }
-    }
-
-    /// A session with amount 0.000: the sheet shows the card form and saves the card.
-    private func addCard() {
-        present(methods: []) { try await backend.createCardSession() }
-    }
-
-    private func present(
-        methods: [PaymentMethod], session create: @escaping @MainActor () async throws -> HesabeSession
-    ) {
-        isBusy = true
-        outcome = nil
-        Task {
-            defer { isBusy = false }
-            do {
-                let session = try await create()
-                sheetMethods = methods
-                sheetSession = session
-            } catch {
-                outcome = Outcome(error)
+            guard !Task.isCancelled else { return }
+            failure = Failure(title: "Could not prepare Apple Pay", message: error.localizedDescription) {
+                applePayRound += 1
             }
         }
     }
 
     // MARK: - Saved cards
 
-    private var isConfirmingCharge: Binding<Bool> {
-        Binding(get: { cardToCharge != nil }, set: { if !$0 { cardToCharge = nil } })
+    /// "Pay KWD 0.250 with Mastercard •••• 0008?"
+    private var chargeQuestion: String {
+        guard let card = cardToCharge else { return "" }
+        return "Pay KWD \(hesabeAmount(total)) with \(card.displayName)?"
+    }
+
+    private var removalQuestion: String {
+        guard let card = cardToRemove else { return "" }
+        return "Remove \(card.displayName)?"
+    }
+
+    private var busyCard: HesabeSavedCard.ID? {
+        switch busy {
+        case .charging(let id)?, .removing(let id)?: return id
+        case .paying?, nil: return nil
+        }
     }
 
     private func loadCards() async {
-        // A list that cannot be read leaves the last one on screen: paying still works.
-        if let list = try? await backend.savedCards() { cards = list }
+        do {
+            cards = try await backend.savedCards()
+            cardsError = nil
+        } catch {
+            // A list that was read once stays on screen: paying with a card still works.
+            cardsError = cards == nil ? error.localizedDescription : nil
+        }
     }
 
     private func charge(_ card: HesabeSavedCard) {
-        isBusy = true
-        outcome = nil
+        busy = .charging(card.id)
         Task {
-            defer { isBusy = false }
+            defer { busy = nil }
             do {
-                outcome = Outcome(try await backend.charge(card, quantity: quantity), card: card)
+                show(PaymentRecord(try await backend.charge(card, quantity: quantity), card: card))
             } catch {
-                // The request may have reached Hesabe before the answer was lost.
-                outcome = Outcome(
-                    title: "Could not confirm",
-                    detail: error.localizedDescription
-                        + "\nThe card may have been charged. Check before paying again.")
+                show(PaymentRecord(unansweredChargeOn: card, error: error))
             }
         }
     }
 
     private func remove(_ card: HesabeSavedCard) {
-        isBusy = true
+        busy = .removing(card.id)
         Task {
-            defer { isBusy = false }
+            defer { busy = nil }
             do {
                 try await backend.remove(card)
             } catch {
-                outcome = Outcome(error)
+                failure = Failure(title: "Could not remove the card", message: error.localizedDescription) {
+                    remove(card)
+                }
             }
             await loadCards()
         }
     }
 
-    // MARK: - Result
+    // MARK: - Results
 
-    /// Shows what the SDK learned from Hesabe, then what the server learned by asking
-    /// Hesabe itself. Only the second one may release an order.
-    private func show(_ result: PaymentResult) async {
-        var shown = Outcome(result)
-        outcome = shown
-        switch result {
-        case .paid(let transaction):
-            // The card form may have saved the card along with the payment.
+    /// Opens the result screen for a payment that has just ended, then has the server
+    /// ask Hesabe about it.
+    private func show(_ record: PaymentRecord) {
+        history.add(record)
+        path = [.result(record.id)]
+        Task {
+            await verify(record.id)
+            // A payment can save a card, and a charge can be a card's last.
             await loadCards()
-            guard let token = transaction.token else { return }
-            do {
-                let confirmation = try await backend.confirm(token: token)
-                shown.detail += confirmation.paid
-                    ? "\nYour server asked Hesabe too: \(confirmation.status). The order can be released."
-                    : "\nYour server asked Hesabe and got \(confirmation.status). Do not release the order."
-            } catch {
-                shown.detail += "\nYour server could not confirm it: \(error.localizedDescription)"
-            }
-            outcome = shown
-        case .cardSaved:
-            await loadCards()
-        case .failed, .pending, .canceled, .unconfirmed, .notStarted:
-            break
         }
     }
-}
 
-/// One saved card in the list.
-private struct SavedCardRow: View {
-    let card: HesabeSavedCard
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "creditcard")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.displayName)
-                    .foregroundStyle(Color.primary)
-                Text("Expires \(card.expiry)")
-                    .font(.footnote)
-                    .foregroundStyle(Color.secondary)
+    /// Has the server ask Hesabe about a payment. What the SDK reported travelled
+    /// through the customer's device, so only this answer may release an order.
+    private func verify(_ id: PaymentRecord.ID) async {
+        // A saved-card charge is already the server's own answer from Hesabe.
+        guard let record = history[id], record.charge == nil, let token = record.token else { return }
+        checking.insert(id)
+        defer { checking.remove(id) }
+        do {
+            let confirmation = try await backend.confirm(token: token)
+            history.update(id) {
+                $0.confirmation = confirmation
+                $0.confirmationError = nil
+            }
+        } catch {
+            history.update(id) {
+                $0.confirmation = nil
+                $0.confirmationError = error.localizedDescription
             }
         }
     }
-}
 
-/// A payment result as the demo shows it.
-struct Outcome {
-    var title: String
-    var detail: String
-    var succeeded = false
-
-    var symbol: String { succeeded ? "checkmark.circle.fill" : "info.circle" }
-
-    init(title: String, detail: String, succeeded: Bool = false) {
-        self.title = title
-        self.detail = detail
-        self.succeeded = succeeded
-    }
-
-    init(_ result: PaymentResult) {
-        switch result {
-        case .paid(let transaction):
-            self.init(title: "Paid", detail: Self.describe(transaction), succeeded: true)
-        case .cardSaved(let transaction):
-            self.init(
-                title: "Card saved",
-                detail: Self.describe(transaction) + "\nNothing was charged. The card is in your saved cards.",
-                succeeded: true)
-        case .failed(let transaction):
-            self.init(title: "Not paid", detail: Self.describe(transaction) + "\nNothing was charged.")
-        case .pending(let transaction):
-            self.init(
-                title: "Processing",
-                detail: Self.describe(transaction) + "\nHesabe is still settling it. Don't pay again yet.")
-        case .canceled:
-            self.init(title: "Cancelled", detail: "Nothing was charged.")
-        case .unconfirmed(let error):
-            self.init(
-                title: "Could not confirm",
-                detail: error.localizedDescription
-                    + "\nThe payment may have gone through. Check before paying again.")
-        case .notStarted(let error):
-            self.init(title: "Could not start", detail: "\(error.localizedDescription)\nNothing was charged.")
+    /// "Check status again": asks Hesabe from the device, then from the server.
+    private func checkAgain(_ id: PaymentRecord.ID) {
+        guard let token = history[id]?.token else { return }
+        checking.insert(id)
+        Task {
+            defer { checking.remove(id) }
+            let result = await HesabeClient(environment: Config.environment)
+                .settle(token: token, afterReturn: false)
+            switch result {
+            case .pending, .unconfirmed:
+                break // still open: `recoverPayments()` asks again at the next launch
+            case .paid, .cardSaved, .failed, .canceled, .notStarted:
+                HesabePendingPayments.resolve(token)
+            }
+            history.update(id) { $0.apply(result) }
+            await verify(id)
+            await loadCards()
         }
     }
 
-    /// The server's answer to charging a saved card. It is Hesabe's own answer to the
-    /// server, so there is nothing further to confirm.
-    init(_ charge: Backend.Charge, card: HesabeSavedCard) {
-        let facts = [card.displayName, charge.amount.map { "KWD \($0)" }, charge.reference, charge.status]
-            .compactMap { $0 }
-            .joined(separator: " · ")
-        if charge.paid {
-            self.init(
-                title: "Paid", detail: facts + "\nYour server charged the card. The order can be released.",
-                succeeded: true)
-        } else {
-            self.init(
-                title: "Not paid",
-                detail: [facts, charge.message ?? "Hesabe did not take the payment.", "Nothing was charged."]
-                    .joined(separator: "\n"))
-        }
-    }
-
-    init(_ error: Error) {
-        self.init(title: "Could not start", detail: error.localizedDescription)
-    }
-
-    private static func describe(_ transaction: HesabeTransaction) -> String {
-        [
-            transaction.paymentType,
-            transaction.amount.map { "KWD \($0)" },
-            transaction.orderReference,
-            transaction.status,
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
+    /// A customer can pay in a banking app and never come back, and iOS can close the
+    /// app during 3-D Secure. Hesabe is asked at every launch, and a payment it has
+    /// settled since opens as a result.
+    private func recover() async {
+        let settled = await HesabeClient(environment: Config.environment).recoverPayments()
+        let records = settled.map { PaymentRecord($0, flow: .recovered) }
+        guard let latest = records.last else { return }
+        for record in records { history.add(record) }
+        if path.isEmpty, busy == nil { path = [.result(latest.id)] }
+        for record in records { await verify(record.id) }
+        await loadCards()
     }
 }

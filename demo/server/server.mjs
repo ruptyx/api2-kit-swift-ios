@@ -89,8 +89,9 @@ const routes = {
       // With a customer and saveCard, Hesabe's card form offers to save the card.
       ...(saveCard === true ? { saveCard: true, customerId: await customerId() } : {}),
     });
-    // `data` is what the SDK takes. It opens this one payment and nothing else.
-    return { data: session.data, token: session.token, reference };
+    // `data` is what the SDK takes. It opens this one payment and nothing else. The
+    // rest names the payment in the app when it ends without a transaction.
+    return { data: session.data, token: session.token, reference, amount };
   },
 
   // The app says a payment ended. The server asks Hesabe itself before it releases
@@ -101,12 +102,8 @@ const routes = {
     }
     try {
       const transaction = await hesabe.transactions.retrieve(token);
-      return {
-        paid: isSuccessful(transaction),
-        status: transaction.status,
-        amount: transaction.amount,
-        reference: transaction.reference_number,
-      };
+      // `transaction` is Hesabe's whole record. The app shows it beside the SDK's own.
+      return { paid: isSuccessful(transaction), status: transaction.status, transaction };
     } catch (error) {
       // A session nobody has paid has no transaction, and Hesabe says "not found".
       if (error instanceof HesabeError && /not found/i.test(error.message)) {
@@ -127,7 +124,7 @@ const routes = {
       responseUrl: RETURN_URL,
       failureUrl: RETURN_URL,
     });
-    return { data: session.data, token: session.token, reference };
+    return { data: session.data, token: session.token, reference, amount: "0.000" };
   },
 
   // The customer's saved cards, as Hesabe lists them. The SDK's `HesabeSavedCard`
@@ -156,6 +153,13 @@ const routes = {
         amount: payment.amount,
         reference,
         token: payment.paymentToken,
+        paymentId: text(payment.paymentId),
+        transactionId: text(payment.transactionId),
+        trackId: text(payment.trackID),
+        auth: text(payment.auth),
+        paidOn: payment.paidOn,
+        // Hesabe's whole answer, for the app's result screen.
+        raw: JSON.stringify(payment, null, 2),
       };
     } catch (error) {
       // The issuer said no. That is an answer, not a server error.
@@ -179,6 +183,9 @@ const routes = {
 };
 
 class BadRequest extends Error {}
+
+// Hesabe sends ids as strings in some answers and as numbers in others.
+const text = (value) => (value == null ? undefined : String(value));
 
 createServer(async (req, res) => {
   const route = `${req.method} ${new URL(req.url, "http://localhost").pathname}`;

@@ -19,25 +19,58 @@ enum BackendError: LocalizedError {
 struct Backend {
     /// A session your server created with Hesabe's Checkout API.
     struct Order: Decodable {
-        /// `response.data` from the Checkout API. The SDK takes this.
-        let data: String
+        /// `response.data` from the Checkout API, which is all the SDK takes.
+        let session: HesabeSession
+        /// Hesabe's token for the session. The outcome is looked up by it.
         let token: String
         let reference: String
+        /// The amount your server asked Hesabe for, with three decimals.
+        let amount: String
+
+        private enum CodingKeys: String, CodingKey {
+            case data, token, reference, amount
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            session = try HesabeSession(data: try container.decode(String.self, forKey: .data))
+            token = try container.decode(String.self, forKey: .token)
+            reference = try container.decode(String.self, forKey: .reference)
+            amount = try container.decode(String.self, forKey: .amount)
+        }
     }
 
     /// What your server found when it asked Hesabe about a payment itself.
-    struct Confirmation: Decodable {
+    struct Confirmation: Codable, Hashable {
+        /// The status your server reports when Hesabe has no transaction for the token.
+        static let notFound = "NOT_FOUND"
+
         let paid: Bool
+        /// Hesabe's status word, or `NOT_FOUND`.
         let status: String
+        /// Hesabe's record as your server read it.
+        let transaction: HesabeTransaction?
     }
 
     /// Hesabe's answer to your server charging a saved card.
-    struct Charge: Decodable {
+    struct Charge: Codable, Hashable {
         let paid: Bool
+        /// Hesabe's result code, `CAPTURED` when paid. `DECLINED` when the issuer said no.
         let status: String
         let amount: String?
         let reference: String?
+        let token: String?
+        let paymentId: String?
+        let transactionId: String?
+        let trackId: String?
+        /// The issuer's authorisation code.
+        let auth: String?
+        /// Kuwait time (UTC+3) with no zone, as Hesabe writes it.
+        let paidOn: String?
+        /// Why the charge did not go through.
         let message: String?
+        /// Hesabe's whole answer as indented JSON.
+        let raw: String?
     }
 
     private struct CardList: Decodable {
@@ -58,9 +91,8 @@ struct Backend {
 
     /// - Parameter saveCard: asks your server to put the customer on the session, so
     ///   Hesabe's card form offers to save the card.
-    func createSession(quantity: Int, saveCard: Bool = false) async throws -> HesabeSession {
-        let order: Order = try await send("POST", "session", ["quantity": quantity, "saveCard": saveCard])
-        return try session(from: order)
+    func createSession(quantity: Int, saveCard: Bool = false) async throws -> Order {
+        try await send("POST", "session", ["quantity": quantity, "saveCard": saveCard])
     }
 
     func confirm(token: String) async throws -> Confirmation {
@@ -70,9 +102,8 @@ struct Backend {
     // MARK: - Saved cards
 
     /// A session that saves a card and charges nothing.
-    func createCardSession() async throws -> HesabeSession {
-        let order: Order = try await send("POST", "cards/session", [:])
-        return try session(from: order)
+    func createCardSession() async throws -> Order {
+        try await send("POST", "cards/session", [:])
     }
 
     func savedCards() async throws -> [HesabeSavedCard] {
@@ -90,14 +121,6 @@ struct Backend {
     }
 
     // MARK: - Transport
-
-    private func session(from order: Order) throws -> HesabeSession {
-        do {
-            return try HesabeSession(data: order.data)
-        } catch {
-            throw BackendError.refused(error.localizedDescription)
-        }
-    }
 
     private func send<Answer: Decodable>(
         _ method: String, _ path: String, _ body: [String: Any]?
@@ -123,6 +146,9 @@ struct Backend {
         }
         do {
             return try JSONDecoder().decode(Answer.self, from: data)
+        } catch let error as HesabeError {
+            // The SDK refused the session's `data`, and says why.
+            throw BackendError.refused(error.localizedDescription)
         } catch {
             throw BackendError.refused("an answer the app could not read")
         }

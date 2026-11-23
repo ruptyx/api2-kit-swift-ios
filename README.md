@@ -19,8 +19,9 @@ payment, a card payment in the card form with 3-D Secure, a payment that saves t
 a card saved without a charge, a charge on a saved card, and removing a card. A declined
 card was run in the card form in a desktop browser presenting itself as an iPhone web
 view. The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
-The sheet's loaders are newer than those runs: they are compiled by GitHub Actions and
-have not been run on a simulator yet.
+The sheet's loaders and the demo's result screen, payment history and saved-card
+confirmations are newer than those runs: they are compiled by GitHub Actions and have
+not been run on a simulator yet.
 
 ## What you need before starting
 
@@ -119,7 +120,7 @@ In SwiftUI:
 | one method, `[.knet]` | That method's page directly. |
 | `[.card]` | Hesabe's embedded card form: the card fields and a pay button, with 3-D Secure in the same sheet. |
 | several, `[.knet, .card, .amex]` | A native list of those enabled on your account, then the chosen method. |
-| none | Hesabe's own page with every enabled method. |
+| none | Hesabe's Indirect Method: its own hosted page, where the customer chooses among every enabled method. |
 
 A payment method is Hesabe's payment type id: `.knet` is 1, `.card` is 2 (MPGS), `.amex`
 is 7. Any other id works as `PaymentMethod(rawValue: 18)`. Google Pay, type 16, is not
@@ -303,12 +304,23 @@ Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
 
 - The server holds the keys and the price. The app sends a quantity and receives a
   session.
-- After a payment the app shows two lines: what the SDK learned from Hesabe, and what the
-  server learned by asking Hesabe itself. Only the second may release an order.
+- A pay button shows a spinner from the tap until the payment has a result, and nothing
+  else can be started meanwhile.
+- "Indirect Method" opens Hesabe's hosted payment page, where the customer chooses the
+  method.
+- Every payment ends on a result screen: the status, Hesabe's details of the payment,
+  what the SDK reported beside what the server confirmed with Hesabe, and Hesabe's
+  answers as JSON with a Copy button. Only the server's answer may release an order.
+- A failed payment offers "Try again", which takes a new session. A pending or
+  unconfirmed one offers "Check status again".
+- "Payment history" keeps the last 50 results on the device and reopens any of them.
 - "Offer to save the card" puts the demo's customer on the session. "Add a card" saves one
-  without a charge. Tapping a saved card charges it from the server, and swiping removes
-  it. The server creates one Hesabe customer and remembers it in
+  without a charge. Tapping a saved card asks "Pay KWD 0.250 with Mastercard •••• 0008?",
+  then the server charges it. Swiping a card, or Edit, removes it after a confirmation.
+  The server creates one Hesabe customer and remembers it in
   `demo/server/.customer.json`.
+- A payment the app never saw finish is settled at the next launch and opens as a
+  result.
 - Everything you change is in `demo/HesabeDemo/Config.swift` and, for the keys, in the
   server's environment (`HESABE_MERCHANT_CODE`, `HESABE_ACCESS_CODE`, `HESABE_SECRET_KEY`,
   `HESABE_IV_KEY`, `HESABE_ENVIRONMENT`).
