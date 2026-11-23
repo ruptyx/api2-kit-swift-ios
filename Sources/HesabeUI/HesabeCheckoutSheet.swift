@@ -10,6 +10,10 @@ import UIKit
 ///
 /// Cards are entered in Hesabe's embedded card form inside the sheet. A session with
 /// amount `0.000` and a customer shows the same form to save a card without a charge.
+///
+/// The sheet is on screen as soon as `present` is called, with a loader for every step
+/// that waits on Hesabe: reading the session, opening the payment page, and confirming
+/// the payment.
 @MainActor
 public final class HesabeCheckoutSheet {
     private let configuration: HesabeConfiguration
@@ -42,13 +46,18 @@ public final class HesabeCheckoutSheet {
             return .notStarted(.configuration("the presenting view controller is already presenting"))
         }
 
+        let navigation = UINavigationController()
+        navigation.modalPresentationStyle = .formSheet
+        // The customer leaves through Cancel, so the end of the payment is always seen.
+        navigation.isModalInPresentation = true
+
         let details: CheckoutDetails
-        do {
-            details = try await client.details(for: session)
-        } catch let error as HesabeError {
-            return .notStarted(error)
-        } catch {
-            return .notStarted(.connection(error.localizedDescription))
+        switch await start(session, in: navigation, from: presenter) {
+        case .ready(let read):
+            details = read
+        case .ended(let result):
+            await dismiss(navigation)
+            return result
         }
 
         // A session that only saves a card has one way through: the card form.
@@ -56,13 +65,9 @@ public final class HesabeCheckoutSheet {
             ? []
             : methods.filter { details.paymentMethods.contains($0) && !$0.isGooglePay }
         if !details.isCardVerification, !methods.isEmpty, offered.isEmpty {
+            await dismiss(navigation)
             return .notStarted(.configuration("none of the requested payment methods is enabled for this session"))
         }
-
-        let navigation = UINavigationController()
-        navigation.modalPresentationStyle = .formSheet
-        // The customer leaves through Cancel, so the end of the payment is always seen.
-        navigation.isModalInPresentation = true
 
         var method: PaymentMethod? = offered.count == 1 ? offered[0] : nil
         if offered.count > 1 {
@@ -73,7 +78,6 @@ public final class HesabeCheckoutSheet {
             navigation.setViewControllers([picker], animated: false)
             method = await withCheckedContinuation { continuation in
                 picker.onChoice = { continuation.resume(returning: $0) }
-                presenter.present(navigation, animated: true)
             }
             guard method != nil else {
                 await dismiss(navigation)
@@ -98,15 +102,12 @@ public final class HesabeCheckoutSheet {
             title: details.isCardVerification
                 ? strings.addCard
                 : configuration.merchantDisplayName ?? method?.displayName,
-            cancelTitle: strings.cancel)
+            cancelTitle: strings.cancel,
+            loadingMessage: strings.opening(method, inCardForm: usesCardForm))
         let outcome: PaymentWebViewController.Outcome = await withCheckedContinuation { continuation in
             page.onOutcome = { continuation.resume(returning: $0) }
-            if navigation.presentingViewController == nil {
-                navigation.setViewControllers([page], animated: false)
-                presenter.present(navigation, animated: true)
-            } else {
-                navigation.setViewControllers([page], animated: true)
-            }
+            // The page slides in after the method list, and takes the loader's place.
+            navigation.setViewControllers([page], animated: offered.count > 1)
         }
 
         page.showConfirming(strings.confirming)
@@ -134,6 +135,44 @@ public final class HesabeCheckoutSheet {
         }
         await dismiss(navigation)
         return result
+    }
+
+    /// How the first step ended: with the session read, or with the checkout over.
+    private enum Start {
+        case ready(CheckoutDetails)
+        case ended(PaymentResult)
+    }
+
+    /// Puts the sheet on screen with a loader and reads the session from Hesabe. The
+    /// request runs while the sheet rises, so the loader costs the customer no time.
+    private func start(
+        _ session: HesabeSession, in navigation: UINavigationController, from presenter: UIViewController
+    ) async -> Start {
+        let loading = LoadingViewController(
+            title: configuration.merchantDisplayName, message: strings.preparing,
+            cancelTitle: strings.cancel, retryTitle: strings.tryAgain)
+        navigation.setViewControllers([loading], animated: false)
+
+        var attempt = Task { [client] in try await client.details(for: session) }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            presenter.present(navigation, animated: true) { continuation.resume() }
+        }
+
+        while true {
+            loading.onCancel = { [attempt] in attempt.cancel() }
+            do {
+                return .ready(try await attempt.value)
+            } catch {
+                if attempt.isCancelled { return .ended(.canceled) }
+                let error = (error as? HesabeError) ?? .connection(error.localizedDescription)
+                // Reading a session changes nothing at Hesabe, so a lost connection is
+                // tried again in place. A session Hesabe refused stays refused.
+                guard case .connection = error,
+                      await loading.offerRetry(after: error.localizedDescription)
+                else { return .ended(.notStarted(error)) }
+                attempt = Task { [client] in try await client.details(for: session) }
+            }
+        }
     }
 
     private func dismiss(_ navigation: UINavigationController) async {

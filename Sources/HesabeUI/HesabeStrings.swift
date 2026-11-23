@@ -10,6 +10,15 @@ public struct HesabeStrings: Sendable, Hashable {
     public var chooseMethod: String
     /// The title above the card form when the session saves a card and charges nothing.
     public var addCard: String
+    /// Under the loader while the session is read, before any payment page opens.
+    public var preparing: String
+    /// Under the loader while one method's page opens. `%@` is the method's name:
+    /// "Connecting to KNET…".
+    public var connecting: String
+    /// Under the loader while Hesabe's embedded card form opens.
+    public var openingCardForm: String
+    /// Under the loader while Hesabe's own page, with every method, opens.
+    public var openingPaymentPage: String
     public var confirming: String
     public var processing: String
     public var paid: String
@@ -21,6 +30,7 @@ public struct HesabeStrings: Sendable, Hashable {
 
     public init(
         languageCode: String, cancel: String, chooseMethod: String, addCard: String,
+        preparing: String, connecting: String, openingCardForm: String, openingPaymentPage: String,
         confirming: String, processing: String, paid: String, cardSaved: String,
         notPaid: String, pending: String, unconfirmed: String, tryAgain: String
     ) {
@@ -28,6 +38,10 @@ public struct HesabeStrings: Sendable, Hashable {
         self.cancel = cancel
         self.chooseMethod = chooseMethod
         self.addCard = addCard
+        self.preparing = preparing
+        self.connecting = connecting
+        self.openingCardForm = openingCardForm
+        self.openingPaymentPage = openingPaymentPage
         self.confirming = confirming
         self.processing = processing
         self.paid = paid
@@ -43,6 +57,10 @@ public struct HesabeStrings: Sendable, Hashable {
         cancel: "Cancel",
         chooseMethod: "Pay with",
         addCard: "Add a card",
+        preparing: "Preparing your payment…",
+        connecting: "Connecting to %@…",
+        openingCardForm: "Opening secure card form…",
+        openingPaymentPage: "Opening the payment page…",
         confirming: "Confirming your payment…",
         processing: "Processing",
         paid: "Payment complete",
@@ -58,6 +76,10 @@ public struct HesabeStrings: Sendable, Hashable {
         cancel: "إلغاء",
         chooseMethod: "ادفع بواسطة",
         addCard: "إضافة بطاقة",
+        preparing: "جارٍ تجهيز الدفع…",
+        connecting: "جارٍ الاتصال بـ %@…",
+        openingCardForm: "جارٍ فتح نموذج البطاقة الآمن…",
+        openingPaymentPage: "جارٍ فتح صفحة الدفع…",
         confirming: "جارٍ تأكيد الدفع…",
         processing: "جارٍ المعالجة",
         paid: "تم الدفع",
@@ -71,6 +93,17 @@ public struct HesabeStrings: Sendable, Hashable {
     /// Arabic when the device's first language is Arabic, English otherwise.
     public static var automatic: HesabeStrings {
         Locale.preferredLanguages.first?.hasPrefix("ar") == true ? .arabic : .english
+    }
+
+    /// The line under the loader while a payment page opens.
+    ///
+    /// - Parameters:
+    ///   - method: the method whose page opens, `nil` for Hesabe's own page.
+    ///   - inCardForm: `true` when the page is Hesabe's embedded card form.
+    func opening(_ method: PaymentMethod?, inCardForm: Bool) -> String {
+        if inCardForm { return openingCardForm }
+        guard let method else { return openingPaymentPage }
+        return connecting.replacingOccurrences(of: "%@", with: method.displayName)
     }
 
     /// The line shown for a settled payment, and whether it reads as a success.

@@ -65,6 +65,13 @@ final class MethodPickerViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard !hasChosen else { return }
+        // The row answers the tap at once, and no second row can be tapped while the
+        // payment page slides in.
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.startAnimating()
+        tableView.cellForRow(at: indexPath)?.accessoryView = spinner
+        tableView.allowsSelection = false
         choose(methods[indexPath.row])
     }
 }

@@ -19,6 +19,8 @@ payment, a card payment in the card form with 3-D Secure, a payment that saves t
 a card saved without a charge, a charge on a saved card, and removing a card. A declined
 card was run in the card form in a desktop browser presenting itself as an iPhone web
 view. The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
+The sheet's loaders are newer than those runs: they are compiled by GitHub Actions and
+have not been run on a simulator yet.
 
 ## What you need before starting
 
@@ -122,6 +124,12 @@ In SwiftUI:
 A payment method is Hesabe's payment type id: `.knet` is 1, `.card` is 2 (MPGS), `.amex`
 is 7. Any other id works as `PaymentMethod(rawValue: 18)`. Google Pay, type 16, is not
 part of the iOS SDK: the method list never offers it.
+
+The sheet is on screen as soon as you call it. It shows a loader while it reads the
+session, while the payment page opens ("Connecting to KNET…", "Opening secure card
+form…") and while it asks Hesabe how the payment ended, so a tap is always answered.
+A lost connection while the session is read is reported in the sheet with a "Try again"
+button. The texts are in `HesabeStrings`, in English and Arabic.
 
 The card form is Hesabe's page at `pay/webview`, shown in the sheet under your app's own
 title bar. The card number is typed into Hesabe's page and sent by it to Hesabe: it never
@@ -309,6 +317,7 @@ Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
 | `Hesabe/HesabeClient.swift` | The keyless calls: session details, payment page and card form addresses, outcome. |
 | `HesabeUI/HesabeCheckoutSheet.swift` | Reads the session, shows the method list, the card form or the page, settles the result. |
 | `HesabeUI/PaymentWebViewController.swift` | Hesabe's page or card form in a web view: bank app hand-off, 3-D Secure popups, return detection. |
+| `HesabeUI/StatusView.swift` | What the sheet shows between pages: a loader with a line of text, the settled result, a failure with "Try again". |
 | `Hesabe/HesabeSavedCard.swift` | One saved card as Hesabe lists it, for your server to pass through. |
 | `HesabeUI/HesabeApplePayButton.swift` | The Apple Pay button and its loading, processing and retry states. |
 | `Hesabe/HesabePendingPayments.swift` | The tokens of payments in flight, kept across launches. |

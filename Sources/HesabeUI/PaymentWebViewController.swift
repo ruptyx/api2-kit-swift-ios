@@ -19,6 +19,7 @@ final class PaymentWebViewController: UIViewController {
     private let pageURL: URL
     private let returnURLs: ReturnURLs
     private let cancelTitle: String
+    private let loadingMessage: String
     private var hasFinished = false
     /// False until the first page has rendered. An HTTP error before that is Hesabe
     /// refusing the session, not a step of the payment.
@@ -50,54 +51,22 @@ final class PaymentWebViewController: UIViewController {
         return view
     }()
 
-    private lazy var spinner = UIActivityIndicatorView(style: .medium)
+    /// Covers the page while it opens, and again once the flow ends, so the customer
+    /// sees what is happening and not a blank page or a sheet that vanishes
+    /// mid-transaction.
+    private let status = StatusView()
 
-    /// Covers the page once the flow ends, so the customer sees the payment being
-    /// confirmed and not a sheet that vanishes mid-transaction.
-    private lazy var statusOverlay: UIView = {
-        let overlay = UIView()
-        overlay.backgroundColor = .systemBackground
-        overlay.isHidden = true
-        overlay.translatesAutoresizingMaskIntoConstraints = false
+    /// Spins in the bar while a later page of the flow loads: the bank's page after
+    /// KNET's, or the way back to Hesabe. It never covers the page the customer is on.
+    private lazy var progress = UIActivityIndicatorView(style: .medium)
 
-        let stack = UIStackView(arrangedSubviews: [statusIcon, statusSpinner, statusLabel])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 16
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        overlay.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 32),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -32),
-        ])
-        return overlay
-    }()
-
-    private lazy var statusSpinner = UIActivityIndicatorView(style: .large)
-
-    private lazy var statusIcon: UIImageView = {
-        let view = UIImageView()
-        view.isHidden = true
-        view.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 52, weight: .regular)
-        return view
-    }()
-
-    private lazy var statusLabel: UILabel = {
-        let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .headline)
-        label.adjustsFontForContentSizeCategory = true
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        return label
-    }()
-
-    init(pageURL: URL, returnURLs: ReturnURLs, title: String?, cancelTitle: String) {
+    /// - Parameter loadingMessage: the line under the loader until the first page has
+    ///   rendered, for example "Connecting to KNET…".
+    init(pageURL: URL, returnURLs: ReturnURLs, title: String?, cancelTitle: String, loadingMessage: String) {
         self.pageURL = pageURL
         self.returnURLs = returnURLs
         self.cancelTitle = cancelTitle
+        self.loadingMessage = loadingMessage
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
@@ -111,27 +80,25 @@ final class PaymentWebViewController: UIViewController {
         navigationItem.hidesBackButton = true
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: cancelTitle, style: .plain, target: self, action: #selector(cancelTapped))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: progress)
 
         webView.translatesAutoresizingMaskIntoConstraints = false
-        spinner.translatesAutoresizingMaskIntoConstraints = false
+        status.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
-        view.addSubview(spinner)
-        view.addSubview(statusOverlay)
+        view.addSubview(status)
 
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            statusOverlay.topAnchor.constraint(equalTo: view.topAnchor),
-            statusOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            statusOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            statusOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            status.topAnchor.constraint(equalTo: view.topAnchor),
+            status.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            status.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            status.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
 
-        spinner.startAnimating()
+        status.showLoading(loadingMessage)
         webView.load(URLRequest(url: pageURL))
     }
 
@@ -143,28 +110,19 @@ final class PaymentWebViewController: UIViewController {
 
     // MARK: - Status
 
-    /// Hides the page behind a spinner while Hesabe is asked what happened.
+    /// Hides the page behind a loader while Hesabe is asked what happened.
     func showConfirming(_ message: String) {
         navigationItem.leftBarButtonItem?.isEnabled = false
         webView.stopLoading()
-        statusIcon.isHidden = true
-        statusSpinner.isHidden = false
-        statusSpinner.startAnimating()
-        statusLabel.text = message
-        statusOverlay.isHidden = false
+        progress.stopAnimating()
+        status.showLoading(message)
+        status.isHidden = false
     }
 
-    /// Shows the settled outcome for a moment, the way a card terminal shows its
-    /// result before printing.
+    /// Shows the settled outcome for a moment before the sheet closes.
     func showSettled(succeeded: Bool, message: String) async {
-        statusSpinner.stopAnimating()
-        statusSpinner.isHidden = true
-        statusIcon.image = UIImage(systemName: succeeded ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-        statusIcon.tintColor = succeeded ? .systemGreen : .systemOrange
-        statusIcon.isHidden = false
-        statusLabel.text = message
-        statusOverlay.isHidden = false
-        UIAccessibility.post(notification: .announcement, argument: message)
+        status.showResult(succeeded: succeeded, message: message)
+        status.isHidden = false
         try? await Task.sleep(nanoseconds: 1_200_000_000)
     }
 
@@ -232,9 +190,16 @@ extension PaymentWebViewController: WKNavigationDelegate {
         return .allow
     }
 
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if hasShownPage, !hasFinished { progress.startAnimating() }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        spinner.stopAnimating()
+        progress.stopAnimating()
         hasShownPage = true
+        // The first page is on screen. Once the flow has ended the cover stays: it is
+        // showing the confirmation by then.
+        if !hasFinished { status.isHidden = true }
         // A page that reached a return URL without either callback, by script.
         _ = endIfReturn(webView.url)
     }
@@ -254,7 +219,7 @@ extension PaymentWebViewController: WKNavigationDelegate {
     }
 
     private func fail(_ error: Error) {
-        spinner.stopAnimating()
+        progress.stopAnimating()
         let error = error as NSError
         // Both are the echo of a navigation this delegate cancelled itself.
         if error.domain == NSURLErrorDomain, error.code == NSURLErrorCancelled { return }
