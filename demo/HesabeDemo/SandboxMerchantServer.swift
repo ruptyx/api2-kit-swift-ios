@@ -94,7 +94,8 @@ struct SandboxMerchantServer {
     /// Hesabe's answer to the server charging a saved card.
     struct Charge: Codable, Hashable {
         let paid: Bool
-        /// Hesabe's result code, `CAPTURED` when paid. `DECLINED` when the issuer said no.
+        /// Hesabe's result code, `CAPTURED` when paid. `DECLINED` when the card was
+        /// refused.
         let status: String
         var amount: String?
         var reference: String?
@@ -192,7 +193,7 @@ struct SandboxMerchantServer {
             "customer_id": customer,
             "order_reference": reference,
         ])
-        // The issuer said no. That is an answer, not a request that went wrong.
+        // The card was refused. That is an answer, not a request that went wrong.
         if answer.isDecline {
             return Charge(
                 paid: false, status: "DECLINED", amount: amount, reference: reference,
@@ -355,7 +356,7 @@ struct SandboxMerchantServer {
 
     /// One answer from Hesabe: the HTTP status and the envelope, decrypted.
     private struct Answer {
-        /// What Hesabe's message says when an issuer refuses a card.
+        /// What Hesabe's message says when a card is refused.
         private static let declineWords = [
             "insufficient funds", "do not honour", "do not honor", "declined",
             "not eligible for merchant-initiated charge", "expired card", "stolen", "lost card",
@@ -388,8 +389,9 @@ struct SandboxMerchantServer {
             status == 404 || (isRefusal && message.range(of: "not found", options: .caseInsensitive) != nil)
         }
 
-        /// True when the issuer refused the card. Hesabe reports that as a refused
-        /// request whose message says why.
+        /// True when the card was refused, by its issuer or by Hesabe: "Invalid card or
+        /// customer" for a card the customer never saved (sandbox, November 2026).
+        /// Hesabe reports both as a refused request whose message says why.
         var isDecline: Bool {
             guard isRefusal, ![401, 403, 429].contains(status) else { return false }
             let words = message.lowercased()

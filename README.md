@@ -24,7 +24,10 @@ nothing has been run on an iPhone.
 
 Newer than those runs, compiled by GitHub Actions and not yet run on a simulator: the
 sheet's loaders and logos, the demo's result screen, payment history and saved-card
-confirmations, and the demo creating its own sessions.
+confirmations, and the demo creating its own sessions. The code that creates them was
+run on a Mac by GitHub Actions against the sandbox on 25 November 2026: a session, a
+session that offers to save the card, a session that saves one, the customer, the card
+list, the lookup of an unpaid session and a charge Hesabe refused.
 
 ## What you need before starting
 
