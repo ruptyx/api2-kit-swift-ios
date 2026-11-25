@@ -165,7 +165,9 @@ struct CheckoutView: View {
 
     private func payButton(_ title: String, methods: [PaymentMethod], caption: String? = nil) -> some View {
         let flow = PaymentRecord.Flow.checkout(methods: methods)
-        return PayButton(title: title, caption: caption, isBusy: busy == .paying(flow)) { start(flow) }
+        return PayButton(title: title, caption: caption, logos: methods, isBusy: busy == .paying(flow)) {
+            start(flow)
+        }
     }
 
     /// Asks the server for a session and hands it to the checkout sheet. The spinner is

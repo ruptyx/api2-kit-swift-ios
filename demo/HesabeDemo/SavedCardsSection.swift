@@ -88,14 +88,15 @@ struct SavedCardsSection: View {
     }
 }
 
-/// One saved card: the scheme and the last four digits, then the expiry.
+/// One saved card: Hesabe's card logo, the scheme and the last four digits, then the
+/// expiry.
 @MainActor
 private struct SavedCardRow: View {
     let card: HesabeSavedCard
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "creditcard")
+            HesabeMethodLogo(.card)
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.displayName)
                     .foregroundStyle(Color.primary)

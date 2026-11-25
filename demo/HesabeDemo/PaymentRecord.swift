@@ -124,6 +124,28 @@ extension PaymentRecord {
     }
 }
 
+// MARK: - Method
+
+extension PaymentRecord {
+    /// The method the payment was made with, when the demo can tell. Its logo is shown
+    /// beside the result.
+    var method: PaymentMethod? {
+        switch flow {
+        case .checkout(let methods) where methods.count == 1: return methods[0]
+        case .applePay: return Config.applePayMethod
+        case .addCard, .savedCard: return .card
+        case .checkout, .recovered: break
+        }
+        // The customer chose in the list or on Hesabe's page. Hesabe's name for the
+        // gateway says which: `KNET` or `MPGS` (sandbox, November 2026).
+        switch transaction?.paymentType?.uppercased() {
+        case "KNET"?: return .knet
+        case "MPGS"?: return .card
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Verification
 
 extension PaymentRecord {

@@ -353,6 +353,8 @@ from a value the app sends.
   else can be started meanwhile.
 - "Indirect Method" opens Hesabe's hosted payment page, where the customer chooses the
   method.
+- The pay buttons, the saved cards and the result screen show Hesabe's logo for the
+  method, with `HesabeMethodLogo`.
 - Every payment ends on a result screen: the status, Hesabe's details of the payment,
   what the SDK reported beside what the server confirmed with Hesabe, and Hesabe's
   answers as JSON with a Copy button. Only the server's answer may release an order.

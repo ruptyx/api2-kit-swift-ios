@@ -1,3 +1,4 @@
+import HesabeUI
 import SwiftUI
 
 /// A row that starts something on a server and says so at once: the spinner is inside
@@ -10,6 +11,8 @@ struct PayButton: View {
     let title: String
     /// One line under the title saying what the button does.
     var caption: String?
+    /// The methods the button pays with. Their logos close the row.
+    var logos: [PaymentMethod] = []
     let isBusy: Bool
     let action: () -> Void
 
@@ -25,8 +28,11 @@ struct PayButton: View {
                     }
                 }
                 Spacer()
+                // The spinner takes the logos' place, so the row never outgrows the screen.
                 if isBusy {
                     ProgressView()
+                } else {
+                    ForEach(logos, id: \.self) { HesabeMethodLogo($0) }
                 }
             }
         }

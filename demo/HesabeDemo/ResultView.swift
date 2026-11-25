@@ -57,18 +57,23 @@ struct ResultView: View {
     private struct Detail: Identifiable {
         let label: String
         let value: String?
+        /// The payment method whose logo sits beside the value.
+        let logo: PaymentMethod?
         var id: String { label }
 
-        init(_ label: String, _ value: String?) {
+        init(_ label: String, _ value: String?, logo: PaymentMethod? = nil) {
             self.label = label
             self.value = value
+            self.logo = logo
         }
     }
 
     private var paymentDetails: [Detail] {
         [
             Detail("Amount", record.amount.map { "KWD \($0)" }),
-            Detail("Method", record.transaction?.paymentType),
+            Detail(
+                "Method", record.transaction?.paymentType ?? record.method?.displayName,
+                logo: record.method),
             Detail("Card", record.transaction?.maskedCard ?? savedCardName),
             Detail("Order reference", record.reference),
             Detail("Payment ID", record.transaction?.paymentID ?? record.charge?.paymentId),
@@ -106,7 +111,12 @@ struct ResultView: View {
         }
         ForEach(known) { detail in
             LabeledContent(detail.label) {
-                Text(detail.value ?? "").textSelection(.enabled)
+                HStack {
+                    if let logo = detail.logo {
+                        HesabeMethodLogo(logo)
+                    }
+                    Text(detail.value ?? "").textSelection(.enabled)
+                }
             }
         }
     }
