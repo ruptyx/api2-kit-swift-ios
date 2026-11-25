@@ -23,7 +23,7 @@ struct CheckoutView: View {
     /// The payment in the checkout sheet: the order the server created, and how it was
     /// started.
     private struct Attempt {
-        let order: Backend.Order
+        let order: SandboxMerchantServer.Order
         let flow: PaymentRecord.Flow
     }
 
@@ -34,7 +34,9 @@ struct CheckoutView: View {
         let retry: () -> Void
     }
 
-    private let backend = Backend(baseURL: Config.backend)
+    /// Stands in for your server. In your app each of these calls goes to your own
+    /// server over HTTPS, and the keys stay there.
+    private let server = SandboxMerchantServer()
 
     @State private var path: [Route] = []
     @State private var history = PaymentHistory.load()
@@ -53,7 +55,7 @@ struct CheckoutView: View {
 
     /// The order behind the Apple Pay button. A session is single use, so the button
     /// gets a new one whenever the quantity changes or a payment ends.
-    @State private var applePayOrder: Backend.Order?
+    @State private var applePayOrder: SandboxMerchantServer.Order?
     @State private var applePayRound = 0
 
     /// The customer's saved cards, as the server lists them. `nil` until it answers.
@@ -176,8 +178,8 @@ struct CheckoutView: View {
                 // "Add a card" is a session with amount 0.000: the sheet shows the card
                 // form and saves the card.
                 let order = try await (flow == .addCard
-                    ? backend.createCardSession()
-                    : backend.createSession(quantity: quantity, saveCard: offersCardSaving))
+                    ? server.createCardSession()
+                    : server.createSession(quantity: quantity, saveCard: offersCardSaving))
                 attempt = Attempt(order: order, flow: flow)
                 sheetSession = order.session
             } catch {
@@ -238,7 +240,7 @@ struct CheckoutView: View {
         guard Config.applePayPage != nil else { return }
         applePayOrder = nil
         do {
-            let order = try await backend.createSession(quantity: quantity)
+            let order = try await server.createSession(quantity: quantity)
             if !Task.isCancelled { applePayOrder = order }
         } catch {
             guard !Task.isCancelled else { return }
@@ -270,7 +272,7 @@ struct CheckoutView: View {
 
     private func loadCards() async {
         do {
-            cards = try await backend.savedCards()
+            cards = try await server.savedCards()
             cardsError = nil
         } catch {
             // A list that was read once stays on screen: paying with a card still works.
@@ -283,7 +285,7 @@ struct CheckoutView: View {
         Task {
             defer { busy = nil }
             do {
-                show(PaymentRecord(try await backend.charge(card, quantity: quantity), card: card))
+                show(PaymentRecord(try await server.charge(card, quantity: quantity), card: card))
             } catch {
                 show(PaymentRecord(unansweredChargeOn: card, error: error))
             }
@@ -295,7 +297,7 @@ struct CheckoutView: View {
         Task {
             defer { busy = nil }
             do {
-                try await backend.remove(card)
+                try await server.remove(card)
             } catch {
                 failure = Failure(title: "Could not remove the card", message: error.localizedDescription) {
                     remove(card)
@@ -327,7 +329,7 @@ struct CheckoutView: View {
         checking.insert(id)
         defer { checking.remove(id) }
         do {
-            let confirmation = try await backend.confirm(token: token)
+            let confirmation = try await server.confirm(token: token)
             history.update(id) {
                 $0.confirmation = confirmation
                 $0.confirmationError = nil

@@ -57,11 +57,11 @@ struct PaymentRecord: Codable, Identifiable, Hashable {
     /// saved-card charge, which the SDK takes no part in.
     var transaction: HesabeTransaction?
     /// What the server found when it asked Hesabe itself.
-    var confirmation: Backend.Confirmation?
+    var confirmation: SandboxMerchantServer.Confirmation?
     /// Why the server could not be asked.
     var confirmationError: String?
     /// Hesabe's answer to the server's saved-card charge.
-    var charge: Backend.Charge?
+    var charge: SandboxMerchantServer.Charge?
 }
 
 // MARK: - From a result
@@ -71,7 +71,7 @@ extension PaymentRecord {
     ///
     /// - Parameter order: the session the payment ran on. It names the payment when
     ///   Hesabe has no transaction to name it by.
-    init(_ result: PaymentResult, flow: Flow, order: Backend.Order? = nil) {
+    init(_ result: PaymentResult, flow: Flow, order: SandboxMerchantServer.Order? = nil) {
         self.init(
             id: UUID(), date: Date(), flow: flow, outcome: .canceled,
             token: order?.token, reference: order?.reference, amount: order?.amount)
@@ -80,7 +80,7 @@ extension PaymentRecord {
 
     /// The server's answer to charging a saved card. It is Hesabe's own answer to the
     /// server, so there is nothing further to confirm.
-    init(_ charge: Backend.Charge, card: HesabeSavedCard) {
+    init(_ charge: SandboxMerchantServer.Charge, card: HesabeSavedCard) {
         self.init(
             id: UUID(), date: Date(), flow: .savedCard(name: card.displayName),
             outcome: charge.paid ? .paid : .failed, message: charge.message,
@@ -174,7 +174,7 @@ extension PaymentRecord {
     private var sdkStatus: String? {
         switch outcome {
         case .paid, .cardSaved, .failed, .pending: return transaction?.status
-        case .canceled: return Backend.Confirmation.notFound
+        case .canceled: return SandboxMerchantServer.Confirmation.notFound
         case .unconfirmed, .notStarted: return nil
         }
     }

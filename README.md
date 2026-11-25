@@ -8,20 +8,22 @@ form inside the app, which can also save the card for your server to charge late
 Your merchant keys stay on your server. The app holds the session's `data` string, which
 opens one payment and cannot create another. The SDK does no encryption.
 
-`Sources/` is the Swift package. [`demo/`](demo) is a complete app with the small server
-it talks to. [`web/apple-pay.html`](web/apple-pay.html) is the page behind the Apple Pay
-button.
+`Sources/` is the Swift package. [`demo/`](demo) is a complete app that runs against the
+sandbox from Xcode with nothing else to start: one file in it stands in for your server.
+[`web/apple-pay.html`](web/apple-pay.html) is the page behind the Apple Pay button.
 
-Status, November 2026: every Hesabe call the SDK makes was run against the sandbox, and
-so was the demo server. The package and the demo app are compiled, and the package unit
-tested, by GitHub Actions. The demo ran on an iOS simulator against the sandbox: a KNET
-payment, a card payment in the card form with 3-D Secure, a payment that saves the card,
-a card saved without a charge, a charge on a saved card, and removing a card. A declined
-card was run in the card form in a desktop browser presenting itself as an iPhone web
-view. The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
-The sheet's loaders and logos, and the demo's result screen, payment history and
-saved-card confirmations, are newer than those runs: they are compiled by GitHub Actions
-and have not been run on a simulator yet.
+Status, November 2026: every Hesabe call the SDK makes was run against the sandbox. The
+package and the demo app are compiled, and the package unit tested, by GitHub Actions.
+An earlier version of the demo, with the keys in a small server beside it, ran on an iOS
+simulator against the sandbox: a KNET payment, a card payment in the card form with 3-D
+Secure, a payment that saves the card, a card saved without a charge, a charge on a saved
+card, and removing a card. A declined card was run in the card form in a desktop browser
+presenting itself as an iPhone web view. The Apple Pay button has not been run yet, and
+nothing has been run on an iPhone.
+
+Newer than those runs, compiled by GitHub Actions and not yet run on a simulator: the
+sheet's loaders and logos, the demo's result screen, payment history and saved-card
+confirmations, and the demo creating its own sessions.
 
 ## What you need before starting
 
@@ -61,6 +63,20 @@ sandbox). This is the payload before encryption:
 
 Hesabe answers with a `token` and `response.data`. Return `response.data` to the app. It
 is a hex string of about 190 characters.
+
+The endpoint your app calls is yours to shape. The app says what was ordered, never what
+it costs, and gets the session back. This is the one the demo is written against:
+
+```http
+POST /payments/session
+{"quantity": 2}
+
+200 OK
+{"data": "9e5a960d...", "token": "842217...", "reference": "ORDER-1001", "amount": "0.500"}
+```
+
+`data` is all the SDK takes. `token` is what your server looks the payment up by
+afterwards, and `reference` and `amount` name the payment in the app.
 
 Check: open `https://sandbox.hesabe.com/payment?data=` followed by that string in a
 browser. Hesabe's payment page appears.
@@ -237,18 +253,19 @@ The card form then shows "I agree that my card details will be securely saved". 
 amount `"0.000"` the form's button reads "Save Card", nothing is charged, and the SDK
 returns `.cardSaved`.
 
-The demo server does all of it with the `hesabe` package. This is its saved-card charge,
-from [`demo/server/server.mjs`](demo/server/server.mjs):
+[`SandboxMerchantServer.swift`](demo/HesabeDemo/SandboxMerchantServer.swift) in the demo
+makes each of these calls, in the place of your server. This is its saved-card charge:
 
-```js
+```swift
 // With the customer on the charge, Hesabe refuses a card saved by anyone else.
-// Never sent twice: Hesabe has no idempotency keys, so a retry is a second charge.
-const payment = await hesabe.cards.charge({
-  cardId,
-  customerId: customer,
-  amount,
-  orderReference: reference,
-});
+// Sent once and never again: Hesabe has no idempotency keys, so a retry is a
+// second charge.
+let answer = try await send("POST", "api/direct-payment/charge-card", [
+    "card_id": card.id,
+    "amount": amount,
+    "customer_id": customer,
+    "order_reference": reference,
+])
 ```
 
 A charge has no page and no 3-D Secure: Hesabe authenticated the card when it was saved.
@@ -297,19 +314,39 @@ It returns the payments that have since been paid, saved or failed.
 ## Run the demo
 
 The demo is the integration above as a complete app: one product, a quantity, the
-checkout sheet four ways, saved cards, and the Apple Pay button. It runs against the
-sandbox with Hesabe's published test keys.
+checkout sheet four ways, saved cards, and the Apple Pay button. Open
+`demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator. There is nothing else to
+install or start.
 
-```bash
-cd demo/server
-npm install
-npm start
-```
+### The keys in the demo are for the sandbox only
 
-Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
+A demo that runs by itself has no server to keep the keys on, so
+[`SandboxMerchantServer.swift`](demo/HesabeDemo/SandboxMerchantServer.swift) does a
+server's work inside the app: it holds Hesabe's published sandbox keys, encrypts with
+them and calls `https://sandbox.hesabe.com`. It is fixed to the sandbox and it is not
+part of the SDK. `Sources/` holds no keys and no encryption.
 
-- The server holds the keys and the price. The app sends a quantity and receives a
-  session.
+Do not ship that file and do not copy it into an app. Anything compiled into an app can
+be read out of it, so keys in an app are keys anyone can use: to create sessions for any
+amount, to read your transactions and to charge your customers' saved cards. In a live
+app the merchant keys and that code are on your server, and each of the file's methods
+is one endpoint the app calls over HTTPS:
+
+| The app calls | It sends | Your server answers |
+|---|---|---|
+| `POST /payments/session` | `{"quantity": 2, "saveCard": false}` | `{"data": "9e5a960d...", "token": "842217...", "reference": "ORDER-1001", "amount": "0.500"}` |
+| `POST /payments/confirm` | `{"token": "842217..."}` | `{"paid": true, "status": "SUCCESSFUL", "transaction": {...}}` |
+| `POST /cards/session` | `{}` | The same answer as `/payments/session`, with amount `"0.000"`. |
+| `GET /cards` | | `{"cards": [...]}`, Hesabe's list unchanged. |
+| `POST /cards/charge` | `{"cardId": 2001, "quantity": 2}` | `{"paid": true, "status": "CAPTURED", "amount": "0.500", "reference": "ORDER-1002"}` |
+| `POST /cards/remove` | `{"cardId": 2001}` | `{"removed": true}` |
+
+The paths are yours to name. Your server takes the customer from its own login, never
+from a value the app sends.
+
+### What the demo shows
+
+- The stand-in server holds the price. The app sends a quantity and receives a session.
 - A pay button shows a spinner from the tap until the payment has a result, and nothing
   else can be started meanwhile.
 - "Indirect Method" opens Hesabe's hosted payment page, where the customer chooses the
@@ -323,15 +360,11 @@ Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
 - "Offer to save the card" puts the demo's customer on the session. "Add a card" saves one
   without a charge. Tapping a saved card asks "Pay KWD 0.250 with Mastercard •••• 0008?",
   then the server charges it. Swiping a card, or Edit, removes it after a confirmation.
-  The server creates one Hesabe customer and remembers it in
-  `demo/server/.customer.json`.
+  The demo creates one Hesabe customer and remembers it on the device.
 - A payment the app never saw finish is settled at the next launch and opens as a
   result.
-- Everything you change is in `demo/HesabeDemo/Config.swift` and, for the keys, in the
-  server's environment (`HESABE_MERCHANT_CODE`, `HESABE_ACCESS_CODE`, `HESABE_SECRET_KEY`,
-  `HESABE_IV_KEY`, `HESABE_ENVIRONMENT`).
-- On an iPhone, set `Config.backend` to the Mac's address on the network. The simulator
-  uses `localhost`.
+- What the app is told is in `demo/HesabeDemo/Config.swift`: the return URL, the Apple
+  Pay page and the price it shows.
 
 ## How the SDK works
 

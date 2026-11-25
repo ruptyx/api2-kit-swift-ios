@@ -1,18 +1,15 @@
 import Foundation
 import HesabeUI
 
-/// Everything you change to run the demo against your own account. None of it is
-/// secret: the merchant keys live in `demo/server`, never in the app.
+/// Everything the app itself is told. None of it is secret: the sandbox keys are in
+/// `SandboxMerchantServer.swift`, which stands in for your server.
 enum Config {
-    /// The gateway your server creates sessions on.
+    /// The gateway the sessions are created on. `SandboxMerchantServer` is fixed to the
+    /// sandbox, so this changes only when your own server creates the sessions.
     static let environment: HesabeEnvironment = .sandbox
 
-    /// Your server. The simulator reaches the Mac on `localhost`; an iPhone needs the
-    /// Mac's address on the network, or your deployed server.
-    static let backend = URL(string: "http://localhost:4242")!
-
-    /// The `responseUrl` and `failureUrl` your server sends to Hesabe. The same value
-    /// as `RETURN_URL` in `demo/server/server.mjs`.
+    /// The `responseUrl` and `failureUrl` every session is created with. The SDK ends
+    /// the payment when Hesabe navigates to it. Nothing is ever fetched from it.
     static let returnURL = URL(string: "https://example.com/hesabe/return")!
 
     /// The hosted Apple Pay button page, for example
