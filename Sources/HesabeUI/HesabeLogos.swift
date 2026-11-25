@@ -31,7 +31,7 @@ public enum HesabeLogos {
         if let running = downloads[method] {
             download = running
         } else {
-            download = Task { await data(for: method) }
+            download = Task { await logoData(for: method) }
             downloads[method] = download
         }
         let data = await download.value
@@ -58,7 +58,7 @@ public enum HesabeLogos {
         }
     }
 
-    nonisolated private static func data(for method: PaymentMethod) async -> Data? {
+    nonisolated private static func logoData(for method: PaymentMethod) async -> Data? {
         var request = URLRequest(url: method.logoURL)
         request.timeoutInterval = 15
         guard let (data, response) = try? await URLSession.shared.data(for: request),
@@ -102,7 +102,8 @@ public struct HesabeMethodLogo: View {
     public var body: some View {
         ZStack {
             if let badge {
-                Image(uiImage: badge)
+                // Inside a button SwiftUI may tint an image. A logo keeps its colours.
+                Image(uiImage: badge).renderingMode(.original)
             }
         }
         .frame(width: HesabeLogos.badgeSize.width, height: HesabeLogos.badgeSize.height)
