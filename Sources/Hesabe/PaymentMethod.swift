@@ -35,6 +35,13 @@ public struct PaymentMethod: RawRepresentable, Sendable, Hashable, Codable,
     /// never offers it, even when the account has it enabled.
     public var isGooglePay: Bool { rawValue == 16 }
 
+    /// Hesabe's logo for the method: a PNG in Hesabe's assets bucket, named by the
+    /// payment type id. Hesabe has none for some ids, and the address then answers 404.
+    public var logoURL: URL { Self.logos.appendingPathComponent("\(rawValue).png") }
+
+    private static let logos = URL(
+        string: "https://hesabe-assets-ir.s3.eu-west-1.amazonaws.com/landingpage/assets")!
+
     /// The name shown in the method list.
     public var displayName: String {
         switch rawValue {

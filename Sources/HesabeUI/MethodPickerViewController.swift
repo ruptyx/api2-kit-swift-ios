@@ -2,7 +2,8 @@
 import Hesabe
 import UIKit
 
-/// The native list of payment methods, shown when the app offers more than one.
+/// The native list of payment methods, shown when the app offers more than one. Each
+/// row is the method's name beside Hesabe's logo for it.
 @MainActor
 final class MethodPickerViewController: UITableViewController {
     private let methods: [PaymentMethod]
@@ -29,6 +30,19 @@ final class MethodPickerViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "method")
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: cancelTitle, style: .plain, target: self, action: #selector(cancelTapped))
+        loadLogos()
+    }
+
+    /// Each logo joins its row when it arrives. A method Hesabe has no logo for keeps
+    /// its name alone.
+    private func loadLogos() {
+        for (row, method) in methods.enumerated() {
+            Task {
+                guard await HesabeLogos.badge(for: method) != nil else { return }
+                let indexPath = IndexPath(row: row, section: 0)
+                if let cell = tableView.cellForRow(at: indexPath) { configure(cell, at: indexPath) }
+            }
+        }
     }
 
     @objc private func cancelTapped() {
@@ -57,11 +71,17 @@ final class MethodPickerViewController: UITableViewController {
         _ tableView: UITableView, cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "method", for: indexPath)
+        configure(cell, at: indexPath)
+        return cell
+    }
+
+    private func configure(_ cell: UITableViewCell, at indexPath: IndexPath) {
+        let method = methods[indexPath.row]
         var content = cell.defaultContentConfiguration()
-        content.text = methods[indexPath.row].displayName
+        content.text = method.displayName
+        content.image = HesabeLogos.fetched(method) ?? HesabeLogos.placeholder
         cell.contentConfiguration = content
         cell.accessoryType = .disclosureIndicator
-        return cell
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

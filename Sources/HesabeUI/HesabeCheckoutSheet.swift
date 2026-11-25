@@ -32,9 +32,9 @@ public final class HesabeCheckoutSheet {
     ///   - session: a session your server created. It is single use: after any result
     ///     except `.notStarted`, pay again with a new one.
     ///   - methods: the payment methods to offer. One opens that method directly.
-    ///     Several show a native list of those enabled for the session. None opens
-    ///     Hesabe's own page with every enabled method. Ignored by a session that
-    ///     only saves a card.
+    ///     Several show a native list of those enabled for the session, each with
+    ///     Hesabe's logo. None opens Hesabe's own page with every enabled method.
+    ///     Ignored by a session that only saves a card.
     ///   - presenter: the view controller on screen.
     @discardableResult
     public func present(
@@ -50,6 +50,9 @@ public final class HesabeCheckoutSheet {
         navigation.modalPresentationStyle = .formSheet
         // The customer leaves through Cancel, so the end of the payment is always seen.
         navigation.isModalInPresentation = true
+
+        // Fetched while the session is read, so the method list opens with its logos.
+        if methods.count > 1 { HesabeLogos.prefetch(methods) }
 
         let details: CheckoutDetails
         switch await start(session, in: navigation, from: presenter) {

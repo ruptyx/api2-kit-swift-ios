@@ -103,6 +103,12 @@ final class HesabeTests: XCTestCase {
             "https://api.hesabe.com/payment?data=\(hex)&paymentType=1")
     }
 
+    func testALogoIsNamedByItsPaymentType() {
+        XCTAssertEqual(
+            PaymentMethod.card.logoURL.absoluteString,
+            "https://hesabe-assets-ir.s3.eu-west-1.amazonaws.com/landingpage/assets/2.png")
+    }
+
     func testCardFormURLCarriesTheSessionAndTheLanguage() throws {
         let client = HesabeClient(environment: .sandbox)
         let session = try HesabeSession(data: hex)

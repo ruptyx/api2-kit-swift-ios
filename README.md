@@ -19,9 +19,9 @@ payment, a card payment in the card form with 3-D Secure, a payment that saves t
 a card saved without a charge, a charge on a saved card, and removing a card. A declined
 card was run in the card form in a desktop browser presenting itself as an iPhone web
 view. The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
-The sheet's loaders and the demo's result screen, payment history and saved-card
-confirmations are newer than those runs: they are compiled by GitHub Actions and have
-not been run on a simulator yet.
+The sheet's loaders and logos, and the demo's result screen, payment history and
+saved-card confirmations, are newer than those runs: they are compiled by GitHub Actions
+and have not been run on a simulator yet.
 
 ## What you need before starting
 
@@ -119,12 +119,18 @@ In SwiftUI:
 |---|---|
 | one method, `[.knet]` | That method's page directly. |
 | `[.card]` | Hesabe's embedded card form: the card fields and a pay button, with 3-D Secure in the same sheet. |
-| several, `[.knet, .card, .amex]` | A native list of those enabled on your account, then the chosen method. |
+| several, `[.knet, .card, .amex]` | A native list of those enabled on your account, each with its logo, then the chosen method. |
 | none | Hesabe's Indirect Method: its own hosted page, where the customer chooses among every enabled method. |
 
 A payment method is Hesabe's payment type id: `.knet` is 1, `.card` is 2 (MPGS), `.amex`
 is 7. Any other id works as `PaymentMethod(rawValue: 18)`. Google Pay, type 16, is not
 part of the iOS SDK: the method list never offers it.
+
+The logos are Hesabe's own, fetched from Hesabe's assets bucket by payment type id
+(`PaymentMethod.logoURL`) and drawn on a white badge. For your own buttons and rows,
+`HesabeMethodLogo(.knet)` is the same badge in SwiftUI and
+`await HesabeLogos.badge(for: .knet)` is its image in UIKit. A method Hesabe has no logo
+for shows its name alone.
 
 The sheet is on screen as soon as you call it. It shows a loader while it reads the
 session, while the payment page opens ("Connecting to KNET…", "Opening secure card
@@ -335,6 +341,7 @@ Then open `demo/HesabeDemo.xcodeproj` in Xcode and run it on a simulator.
 | `Hesabe/HesabeClient.swift` | The keyless calls: session details, payment page and card form addresses, outcome. |
 | `Hesabe/HesabeTransaction.swift` | A payment as Hesabe recorded it, and the seven results. |
 | `HesabeUI/HesabeCheckoutSheet.swift` | Reads the session, shows the method list, the card form or the page, settles the result. |
+| `HesabeUI/HesabeLogos.swift` | Hesabe's logo for each method, fetched once and drawn on a badge, for the method list and for your own screens. |
 | `HesabeUI/PaymentWebViewController.swift` | Hesabe's page or card form in a web view: bank app hand-off, 3-D Secure popups, return detection. |
 | `HesabeUI/StatusView.swift` | What the sheet shows between pages: a loader with a line of text, the settled result, a failure with "Try again". |
 | `Hesabe/HesabeSavedCard.swift` | One saved card as Hesabe lists it, for your server to pass through. |
@@ -370,6 +377,9 @@ The Hesabe calls, as run on the sandbox in November 2026:
 - The SDK injects no script into its web views. WebKit turns Apple Pay off in a web view
   the app has injected script into.
 - Amounts are shown as Hesabe reports them, never computed on the device.
+- The logos come from `hesabe-assets-ir.s3.eu-west-1.amazonaws.com`, a host other than
+  the gateway. Where an app or a network allows only named hosts, the list shows the
+  names alone until that host is allowed.
 
 ## If something goes wrong
 
