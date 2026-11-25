@@ -12,7 +12,7 @@ public struct HesabeConfiguration: Sendable, Hashable {
     /// Shown in the bar above the payment page.
     public var merchantDisplayName: String?
 
-    /// The hosted page that draws the Apple Pay button, `web/apple-pay.html` in this
+    /// The hosted page that draws the Apple Pay button, `hosting/apple-pay.html` in this
     /// repository. Apple Pay starts only on a page served over HTTPS from a domain
     /// registered with Apple, so it cannot ship inside the app. Needed by
     /// `HesabeApplePayButton` only.

@@ -10,7 +10,8 @@ opens one payment and cannot create another. The SDK does no encryption.
 
 `Sources/` is the Swift package. [`demo/`](demo) is a complete app that runs against the
 sandbox from Xcode with nothing else to start: one file in it stands in for your server.
-[`web/apple-pay.html`](web/apple-pay.html) is the page behind the Apple Pay button.
+[`hosting/apple-pay.html`](hosting/apple-pay.html) is the page behind the Apple Pay
+button, the one file that is hosted.
 
 Status, November 2026: every Hesabe call the SDK makes was run against the sandbox. The
 package and the demo app are compiled, and the package unit tested, by GitHub Actions.
@@ -213,9 +214,10 @@ configuration.applePayPageURL = URL(string: "https://example.com/apple-pay.html"
 
 Apple Pay through Hesabe starts from a web page on a domain registered with Apple, and
 WebKit refuses to start it from a page inside the app. So the button is WebKit's own
-Apple Pay button, drawn by [`web/apple-pay.html`](web/apple-pay.html) in a web view the
-size of the button. The page is the same file for every payment and holds no keys. The
-payment's settings travel in the URL fragment, which browsers never send to a server.
+Apple Pay button, drawn by [`hosting/apple-pay.html`](hosting/apple-pay.html) in a web
+view the size of the button. The page is the same file for every payment and holds no
+keys. The payment's settings travel in the URL fragment, which browsers never send to a
+server.
 
 An earlier version of this page took a production payment in September 2026, from a
 merchant's own domain and with an embedded session. It has not been run with a plain
