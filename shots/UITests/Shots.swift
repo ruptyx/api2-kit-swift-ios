@@ -59,9 +59,14 @@ final class Shots: XCTestCase {
         demo.pause(2)
         demo.shot("page")
         demo.dump("page")
-        demo.type("8888880000000001", into: fields.element(boundBy: 0), "card number")
-        demo.type("0930", into: fields.element(boundBy: 1), "expiry")
-        demo.type("1234", into: fields.element(boundBy: 2), "PIN")
+        let ordered = fields.allElementsBoundByIndex.sorted { $0.frame.minY < $1.frame.minY }
+        guard ordered.count == 3 else {
+            XCTFail("the KNET page has \(ordered.count) fields")
+            return
+        }
+        demo.type("8888880000000001", into: ordered[0], "card number")
+        demo.type("0930", into: ordered[1], "expiry")
+        demo.type("1234", into: ordered[2], "PIN")
         demo.dismissKeyboard()
         demo.shot("filled")
         demo.dump("filled")
@@ -88,8 +93,7 @@ final class Shots: XCTestCase {
         let demo = Demo("4-card")
         guard demo.tap("Card") else { return }
         demo.shot("opening")
-        _ = demo.app.webViews.firstMatch.waitForExistence(timeout: 60)
-        demo.pause(15)
+        demo.waitForPage()
         demo.shot("page")
         demo.dump("page")
     }
@@ -108,12 +112,20 @@ final class Shots: XCTestCase {
         demo.pause(2)
         demo.shot("form")
         demo.dump("form")
-        demo.type("Demo Customer", into: web.textFields.element(boundBy: 0), "name on card")
-        demo.type("5123450000000008", into: web.textFields.element(boundBy: 1), "card number")
-        demo.type("01/39", into: web.textFields.element(boundBy: 2), "expiry")
+        demo.type("Demo Customer", into: demo.field(in: web, "Cardholder name"), "name on card")
+        demo.type("5123450000000008", into: demo.field(in: web, "Card number"), "card number")
+        demo.type("01/39", into: demo.field(in: web, "Expiry"), "expiry")
         demo.type("100", into: web.secureTextFields.firstMatch, "security code")
         demo.dismissKeyboard()
+        let consent = web.switches.firstMatch
+        if consent.exists {
+            consent.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.5)).tap()
+            demo.pause(1)
+            if (consent.value as? String) != "1" { consent.tap() }
+            demo.pause(1)
+        }
         demo.shot("filled")
+        demo.dump("filled")
         let save = web.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Save")).firstMatch
         guard save.waitForExistence(timeout: 10) else {
             XCTFail("no Save Card button")
@@ -153,10 +165,24 @@ final class Shots: XCTestCase {
         let demo = Demo("6-indirect")
         guard demo.tap("Indirect Method") else { return }
         demo.shot("opening")
-        _ = demo.app.webViews.firstMatch.waitForExistence(timeout: 60)
-        demo.pause(12)
+        demo.waitForPage()
         demo.shot("page")
         demo.dump("page")
+    }
+
+    @MainActor
+    func test7Cancel() {
+        let demo = Demo("7-cancel")
+        guard demo.tap("KNET") else { return }
+        guard demo.app.webViews.firstMatch.textFields.firstMatch.waitForExistence(timeout: 90) else {
+            XCTFail("the KNET page did not open")
+            return
+        }
+        demo.app.navigationBars.buttons["Cancel"].tap()
+        demo.pause(2)
+        demo.shot("after-cancel")
+        demo.dump("after-cancel")
+        _ = demo.result("canceled")
     }
 }
 
@@ -227,6 +253,22 @@ final class Demo {
         field.tap()
         pause(1)
         field.typeText(text)
+    }
+
+    func field(in web: XCUIElement, _ label: String) -> XCUIElement {
+        web.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+    }
+
+    /// Waits until a page on another host has drawn something to read or tap.
+    func waitForPage() {
+        let web = app.webViews.firstMatch
+        let content = web.descendants(matching: .any).matching(
+            NSPredicate(format: "elementType IN %@", [
+                XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.button.rawValue,
+                XCUIElement.ElementType.staticText.rawValue,
+            ])).firstMatch
+        if !content.waitForExistence(timeout: 120) { XCTFail("the page did not draw") }
+        pause(4)
     }
 
     /// A web view's keyboard has a Done button above it, and the keyboard covers the
