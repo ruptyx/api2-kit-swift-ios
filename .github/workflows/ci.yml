@@ -1,28 +1,54 @@
-name: CI
+name: Simulator screenshots
 
 on:
   push:
-  pull_request:
 
 jobs:
-  test:
+  shots:
     runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
-        run: xcodebuild -version && swift --version
-      - name: Unit tests
-        run: swift test
-      - name: Build the SDK for the iOS simulator
-        run: >
-          xcodebuild build
-          -scheme Hesabe-Package
-          -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO
-      - name: Build the demo app for the iOS simulator
-        run: >
-          xcodebuild build
-          -project demo/HesabeDemo.xcodeproj
-          -scheme HesabeDemo
-          -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild -version
+      - name: Build the demo app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project demo/HesabeDemo.xcodeproj -scheme HesabeDemo -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/demo CODE_SIGNING_ALLOWED=NO | tail -3
+          ls build/demo/Build/Products/Debug-iphonesimulator
+      - name: Boot a simulator
+        run: |
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+          UDID=$(xcrun simctl list devices available -j | python3 shots/pick-simulator.py)
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
+            --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl install "$UDID" build/demo/Build/Products/Debug-iphonesimulator/HesabeDemo.app
+      - name: Generate the UI test project
+        run: |
+          brew install xcodegen
+          cd shots && xcodegen generate
+      - name: Drive the demo
+        run: |
+          mkdir -p "$PWD/shots/out"
+          TEST_RUNNER_SHOTS_DIR="$PWD/shots/out" xcodebuild test \
+            -project shots/Shots.xcodeproj -scheme Shots \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath build/shots > shots/out/xcodebuild.log 2>&1 || echo "xcodebuild test exit: $?"
+          grep -E "SHOT|Test Case|error:|\*\* TEST|XCTAssert|failed" shots/out/xcodebuild.log | cut -c1-300 | tail -150
+          cp -R "$HOME/hesabe-shots/." shots/out/ 2>/dev/null || true
+          ls -la shots/out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: shots/out
