@@ -21,5 +21,10 @@ Give the address the page is served from to `HesabeConfiguration`, as
 `applePayPageURL`:
 
 ```swift
-configuration.applePayPageURL = URL(string: "https://example.com/apple-pay.html")!
+let configuration = HesabeConfiguration(
+    environment: .production,
+    returnURLs: ReturnURLs(URL(string: "https://example.com/hesabe/return")!),
+    merchantDisplayName: "Example Store",
+    applePayPageURL: URL(string: "https://example.com/apple-pay.html")
+)
 ```

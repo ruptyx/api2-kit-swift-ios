@@ -21,14 +21,14 @@ Status, 27 November 2026: every Hesabe call the SDK makes was run against the sa
 The package and the demo app are compiled, and the package unit tested, by GitHub
 Actions. The demo as it is here was driven by a UI test on an iPhone 16 simulator in
 GitHub Actions, against the sandbox: a KNET payment, a card payment in the card form, a
-card saved without a charge, a charge on that saved card, a cancelled payment, the method
-list and the Indirect Method page. Each payment ended on the result screen with the
-server's own confirmation beside the SDK's.
+payment that saves the card, a card saved without a charge, a charge on that saved card,
+removing a card, a cancelled payment, the method list and the Indirect Method page. Each
+payment ended on the result screen with the server's own confirmation beside the SDK's.
 
-Run only on an earlier version of the demo, on a simulator on 17 November 2026: a card
-payment through a 3-D Secure challenge page, a payment that saves the card, and removing
-a card. A declined card was run in the card form in a desktop browser presenting itself
-as an iPhone web view.
+Run only on an earlier version, on 17 November 2026: a card payment through a 3-D Secure
+challenge page on a simulator, and a declined card (expiry `05/39`) in the card form in a
+desktop browser presenting itself as an iPhone web view. The sandbox paid that card and
+expiry on 27 November 2026, so a declined card has not been run on this version.
 
 The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
 
@@ -180,8 +180,8 @@ Direct Method.
 
 Check: on the sandbox, pay with KNET test card `8888880000000001`, expiry `09/30`, PIN
 `1234`. The sheet shows "Payment complete" and returns `.paid`. Then pay with `[.card]`
-and test card `5123450000000008`, expiry `01/39`, security code `100`. Expiry `05/39` is
-declined and returns `.failed`.
+and test card `5123450000000008`, expiry `01/39`, security code `100`. The card is paid
+in the form and the sheet returns `.paid`.
 
 ### The seven results
 
@@ -216,10 +216,15 @@ HesabeApplePayButton(
 }
 ```
 
-Set `applePayPageURL` in the configuration to the hosted button page:
+Give the configuration from Step 3 the address of the hosted button page:
 
 ```swift
-configuration.applePayPageURL = URL(string: "https://example.com/apple-pay.html")!
+let configuration = HesabeConfiguration(
+    environment: .production,
+    returnURLs: ReturnURLs(URL(string: "https://example.com/hesabe/return")!),
+    merchantDisplayName: "Example Store",
+    applePayPageURL: URL(string: "https://example.com/apple-pay.html")
+)
 ```
 
 - `method` is the Apple Pay payment type on your account: `11` KNET debit, `13` KNET
@@ -227,6 +232,8 @@ configuration.applePayPageURL = URL(string: "https://example.com/apple-pay.html"
 - `type` is the wording (`plain`, `buy`, `checkout`, `book`, `subscribe`, `donate`,
   `order`). `style` is `automatic`, `black`, `white` or `whiteOutline`.
 - Closing the Apple Pay sheet is not a result. The button stays ready.
+- Apple Pay is tested on production with a small amount: Apple Pay test cards do not work
+  on Hesabe's sandbox at the time of writing (Hesabe, November 2026).
 
 ### Why the button is a web view
 
@@ -464,7 +471,7 @@ The Hesabe calls, as run on the sandbox in November 2026:
 - The Apple Pay button shows "Try again": the message beside it says why. The usual
   causes are a missing `applePayPageURL` and an Apple Pay type that is not enabled.
 - KNET opens and nothing happens after the bank app: the bank app did not return. The
-  payment is settled by Step 6 at the next launch.
+  payment is settled by Step 7 at the next launch.
 
 ## Licence
 
