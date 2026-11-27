@@ -96,6 +96,12 @@ final class Shots: XCTestCase {
         demo.waitForPage()
         demo.shot("page")
         demo.dump("page")
+        // Is the loader still over the page later on?
+        for seconds in [10, 20, 40] {
+            demo.pause(TimeInterval(seconds == 10 ? 10 : seconds / 2))
+            demo.shot("page-after-\(seconds)s")
+        }
+        demo.dump("page-after-40s")
     }
 
     @MainActor
