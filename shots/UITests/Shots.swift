@@ -93,15 +93,34 @@ final class Shots: XCTestCase {
         let demo = Demo("4-card")
         guard demo.tap("Card") else { return }
         demo.shot("opening")
-        demo.waitForPage()
-        demo.shot("page")
-        demo.dump("page")
-        // Is the loader still over the page later on?
-        for seconds in [10, 20, 40] {
-            demo.pause(TimeInterval(seconds == 10 ? 10 : seconds / 2))
-            demo.shot("page-after-\(seconds)s")
+        let web = demo.app.webViews.firstMatch
+        guard web.textFields.firstMatch.waitForExistence(timeout: 90) else {
+            XCTFail("the card form did not open")
+            demo.shot("no-form")
+            demo.dump("no-form")
+            return
         }
-        demo.dump("page-after-40s")
+        demo.pause(2)
+        demo.shot("form")
+        demo.dump("form")
+        demo.type("Demo Customer", into: demo.field(in: web, "Cardholder name"), "name on card")
+        demo.type("5123450000000008", into: demo.field(in: web, "Card number"), "card number")
+        demo.type("01/39", into: demo.field(in: web, "Expiry"), "expiry")
+        demo.type("100", into: web.secureTextFields.firstMatch, "security code")
+        demo.dismissKeyboard()
+        demo.shot("filled")
+        demo.dump("filled")
+        let pay = web.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "pay")).firstMatch
+        guard pay.waitForExistence(timeout: 10) else {
+            XCTFail("no Pay button")
+            demo.dump("no-pay-button")
+            return
+        }
+        pay.tap()
+        demo.pause(5)
+        demo.shot("after-pay")
+        demo.dump("after-pay")
+        _ = demo.result("paid")
     }
 
     @MainActor

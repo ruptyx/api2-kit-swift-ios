@@ -43,7 +43,6 @@ jobs:
           TEST_RUNNER_SHOTS_DIR="$PWD/shots/out" xcodebuild test \
             -project shots/Shots.xcodeproj -scheme Shots \
             -destination "platform=iOS Simulator,id=$UDID" \
-            -only-testing:ShotsUITests/Shots/test4Card \
             -derivedDataPath build/shots > shots/out/xcodebuild.log 2>&1 || echo "xcodebuild test exit: $?"
           grep -E "SHOT|Test Case|error:|\*\* TEST|XCTAssert|failed" shots/out/xcodebuild.log | cut -c1-300 | tail -150
           cp -R "$HOME/hesabe-shots/." shots/out/ 2>/dev/null || true
