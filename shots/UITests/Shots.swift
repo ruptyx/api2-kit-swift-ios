@@ -47,7 +47,7 @@ final class Shots: XCTestCase {
     func test3KNET() {
         let demo = Demo("3-knet")
         guard demo.tap("KNET") else { return }
-        demo.shot("opening")
+        demo.watchLoader()
         let web = demo.app.webViews.firstMatch
         let fields = web.textFields
         guard fields.firstMatch.waitForExistence(timeout: 90) else {
@@ -92,7 +92,7 @@ final class Shots: XCTestCase {
     func test4Card() {
         let demo = Demo("4-card")
         guard demo.tap("Card") else { return }
-        demo.shot("opening")
+        demo.watchLoader()
         let web = demo.app.webViews.firstMatch
         guard web.textFields.firstMatch.waitForExistence(timeout: 90) else {
             XCTFail("the card form did not open")
@@ -189,7 +189,7 @@ final class Shots: XCTestCase {
     func test6Indirect() {
         let demo = Demo("6-indirect")
         guard demo.tap("Indirect Method") else { return }
-        demo.shot("opening")
+        demo.watchLoader()
         demo.waitForPage()
         demo.shot("page")
         demo.dump("page")
@@ -233,6 +233,33 @@ final class Demo {
     func shot(_ label: String) {
         count += 1
         save(XCUIScreen.main.screenshot().pngRepresentation, "\(name)-\(count)-\(label).png")
+    }
+
+    /// Times the loader over the first page: when the page's own content could first be
+    /// found under it, and when it left. Takes a screenshot the moment it leaves.
+    func watchLoader() {
+        let loader = app.staticTexts.matching(NSPredicate(
+            format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Opening", "Connecting")).firstMatch
+        let content = app.webViews.firstMatch.descendants(matching: .any).matching(
+            NSPredicate(format: "elementType IN %@", [
+                XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.button.rawValue,
+                XCUIElement.ElementType.staticText.rawValue,
+            ])).firstMatch
+        func seconds(_ value: TimeInterval) -> String { String(format: "%.1f", value) }
+        let start = Date()
+        guard loader.waitForExistence(timeout: 20) else {
+            print("SHOT timing \(name): no loader seen")
+            return
+        }
+        let seen = Date().timeIntervalSince(start)
+        var drawn: TimeInterval?
+        while loader.exists, Date().timeIntervalSince(start) < 90 {
+            if drawn == nil, content.exists { drawn = Date().timeIntervalSince(start) }
+        }
+        let left = Date().timeIntervalSince(start)
+        shot("loader-left")
+        print("SHOT timing \(name): loader seen at \(seconds(seen)) s, left at \(seconds(left)) s, "
+            + "page content first found at \(drawn.map(seconds) ?? "no time before that")")
     }
 
     /// The accessibility tree, to see what a screen is made of when a tap misses.
