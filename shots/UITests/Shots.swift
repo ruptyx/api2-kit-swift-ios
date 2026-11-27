@@ -305,32 +305,11 @@ final class Demo {
         save(XCUIScreen.main.screenshot().pngRepresentation, "\(name)-\(count)-\(label).png")
     }
 
-    /// Times the loader over the first page: when the page's own content could first be
-    /// found under it, and when it left. Takes a screenshot the moment it leaves.
+    /// Keeps a screenshot of the loader over the first page, when it can be caught.
     func watchLoader() {
         let loader = app.staticTexts.matching(NSPredicate(
             format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Opening", "Connecting")).firstMatch
-        let content = app.webViews.firstMatch.descendants(matching: .any).matching(
-            NSPredicate(format: "elementType IN %@", [
-                XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.button.rawValue,
-                XCUIElement.ElementType.staticText.rawValue,
-            ])).firstMatch
-        func seconds(_ value: TimeInterval) -> String { String(format: "%.1f", value) }
-        let start = Date()
-        guard loader.waitForExistence(timeout: 20) else {
-            print("SHOT timing \(name): no loader seen")
-            return
-        }
-        let seen = Date().timeIntervalSince(start)
-        shot("loader")
-        var drawn: TimeInterval?
-        while loader.exists, Date().timeIntervalSince(start) < 90 {
-            if drawn == nil, content.exists { drawn = Date().timeIntervalSince(start) }
-        }
-        let left = Date().timeIntervalSince(start)
-        shot("loader-left")
-        print("SHOT timing \(name): loader seen at \(seconds(seen)) s, left at \(seconds(left)) s, "
-            + "page content first found at \(drawn.map(seconds) ?? "no time before that")")
+        if loader.waitForExistence(timeout: 20) { shot("loader") }
     }
 
     /// The accessibility tree, to see what a screen is made of when a tap misses.

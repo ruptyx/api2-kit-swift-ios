@@ -21,9 +21,8 @@ final class PaymentWebViewController: UIViewController {
     private let cancelTitle: String
     private let loadingMessage: String
     private var hasFinished = false
-    /// False until the first page is shown: it has finished loading, or it has been
-    /// drawing for three seconds. An HTTP error before that is Hesabe refusing the
-    /// session, not a step of the payment.
+    /// False until the first page has rendered. An HTTP error before that is Hesabe
+    /// refusing the session, not a step of the payment.
     private var hasShownPage = false
 
     /// Called once, with how the flow ended.
@@ -111,17 +110,6 @@ final class PaymentWebViewController: UIViewController {
 
     // MARK: - Status
 
-    /// Takes the loader off the first page. Once the flow has ended the cover stays: it
-    /// is showing the confirmation by then.
-    private func revealPage() {
-        guard !hasShownPage else { return }
-        hasShownPage = true
-        guard !hasFinished else { return }
-        status.isHidden = true
-        // A page shown before it has finished keeps the spinner in the bar until it has.
-        if webView.isLoading { progress.startAnimating() }
-    }
-
     /// Hides the page behind a loader while Hesabe is asked what happened.
     func showConfirming(_ message: String) {
         navigationItem.leftBarButtonItem?.isEnabled = false
@@ -206,21 +194,12 @@ extension PaymentWebViewController: WKNavigationDelegate {
         if hasShownPage, !hasFinished { progress.startAnimating() }
     }
 
-    /// The first page has begun to draw. `didFinish` waits for every file on it, and
-    /// Hesabe's payment page for a card type went on loading for more than four seconds
-    /// after its text could be read (sandbox, iOS simulator, November 2026). The loader
-    /// gives a page three seconds to finish, then shows it as it is.
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        guard !hasShownPage else { return }
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            self?.revealPage()
-        }
-    }
-
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        revealPage()
         progress.stopAnimating()
+        hasShownPage = true
+        // The first page is on screen. Once the flow has ended the cover stays: it is
+        // showing the confirmation by then.
+        if !hasFinished { status.isHidden = true }
         // A page that reached a return URL without either callback, by script.
         _ = endIfReturn(webView.url)
     }
