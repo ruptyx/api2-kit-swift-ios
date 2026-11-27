@@ -123,9 +123,7 @@ struct SandboxMerchantServer {
         let amount = try price(of: quantity)
         var customer: Int?
         if saveCard { customer = try await customerID() }
-        // 0 leaves the method to the app: one session serves KNET, cards and Apple Pay.
-        return try await checkout(
-            amount: amount, reference: "DEMO-\(Self.stamp())", paymentType: 0, customer: customer)
+        return try await checkout(amount: amount, reference: "DEMO-\(Self.stamp())", customer: customer)
     }
 
     /// `POST /payments/confirm`. Asks Hesabe about a payment with the merchant keys.
@@ -158,9 +156,7 @@ struct SandboxMerchantServer {
     /// `.cardSaved`.
     func createCardSession() async throws -> Order {
         let customer = try await customerID()
-        // Payment type 2 is MPGS, the gateway that stores cards.
-        return try await checkout(
-            amount: 0, reference: "DEMO-CARD-\(Self.stamp())", paymentType: 2, customer: customer)
+        return try await checkout(amount: 0, reference: "DEMO-CARD-\(Self.stamp())", customer: customer)
     }
 
     /// `GET /cards`. The customer's saved cards, as Hesabe lists them. The SDK's
@@ -255,14 +251,14 @@ struct SandboxMerchantServer {
     /// `POST https://sandbox.hesabe.com/checkout`, the call that creates a session.
     ///
     /// - Parameter customer: the Hesabe customer a card may be saved for.
-    private func checkout(
-        amount: Decimal, reference: String, paymentType: Int, customer: Int?
-    ) async throws -> Order {
+    private func checkout(amount: Decimal, reference: String, customer: Int?) async throws -> Order {
         let total = hesabeAmount(amount)
         var payload: [String: Any] = [
             "amount": total,
             "currency": "KWD",
-            "paymentType": paymentType,
+            // 0 leaves the method to the app and the card gateway to Hesabe, so one
+            // session serves KNET, cards and Apple Pay on any account.
+            "paymentType": 0,
             "orderReferenceNumber": reference,
             // The address the SDK watches for. Nothing is ever fetched from it.
             "responseUrl": Config.returnURL.absoluteString,

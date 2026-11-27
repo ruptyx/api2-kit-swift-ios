@@ -10,6 +10,7 @@
         "status": "SUCCESSFUL",
         "TransactionID": "600000000000001",
         "Id": 100001,
+        "auth_code": "B00400",
         "PaymentID": "100000000000000001",
         "Terminal": "000001",
         "TrackID": "300001",

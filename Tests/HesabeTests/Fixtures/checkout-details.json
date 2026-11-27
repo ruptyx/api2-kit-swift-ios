@@ -10,6 +10,7 @@
     "paymentMethods": [1, 2, 5, 7, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 22],
     "hasCustomer": false,
     "merchantSaveCard": false,
+    "activeTermsCondition": false,
     "applePay": [
       { "id": 9, "merchantIdentifier": "merchant.hesabe.pay", "currency": "KWD", "supportedNetworks": ["visa", "masterCard"], "merchantCapabilities": ["supports3DS"] },
       { "id": 10, "merchantIdentifier": "merchant.hesabe.dec", "currency": "KWD", "supportedNetworks": ["visa", "masterCard"], "merchantCapabilities": ["supports3DS"] },
@@ -17,6 +18,8 @@
       { "id": 13, "merchantIdentifier": "merchant.kib.applepay", "currency": "KWD", "supportedNetworks": ["visa", "masterCard"], "merchantCapabilities": ["supports3DS"] }
     ],
     "googlePay": { "gatewayMerchantId": "900120301", "gateway": "mpgs", "paymentId": 16, "networks": "AMEX,MASTERCARD,VISA", "methods": "PAN_ONLY,CRYPTOGRAM_3DS", "env": "TEST" },
-    "activeDirectGatewayIds": [2]
+    "activeDirectGatewayIds": [5],
+    "directSupportedCardTypes": ["VISA", "MASTERCARD"],
+    "useSongbird": false
   }
 }

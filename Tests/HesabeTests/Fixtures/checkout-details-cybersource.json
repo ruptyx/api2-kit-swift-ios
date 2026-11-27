@@ -1,0 +1,21 @@
+{
+  "status": true,
+  "message": "Checkout details retrieved successfully",
+  "response": {
+    "paymentTypeId": "0",
+    "token": "10000100000000000000000000001",
+    "amount": 0.25,
+    "currency": "KWD",
+    "paymentMethods": [1, 5, 11, 13, 16, 20],
+    "hasCustomer": false,
+    "merchantSaveCard": false,
+    "activeTermsCondition": false,
+    "applePay": [
+      { "id": 11, "currency": "KWD", "supportedNetworks": ["visa", "masterCard"], "merchantCapabilities": ["supports3DS", "supportsDebit"] },
+      { "id": 13, "currency": "KWD", "supportedNetworks": ["visa", "masterCard"], "merchantCapabilities": ["supports3DS"] }
+    ],
+    "activeDirectGatewayIds": [5],
+    "directSupportedCardTypes": ["VISA", "MASTERCARD"],
+    "useSongbird": false
+  }
+}

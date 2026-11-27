@@ -58,7 +58,8 @@ final class HesabeTests: XCTestCase {
         XCTAssertTrue(details.paymentMethods.contains(.amex))
         XCTAssertTrue(details.paymentMethods.contains { $0.isGooglePay })
         XCTAssertEqual(details.applePayMethods, [9, 10, 11, 13])
-        XCTAssertEqual(details.embeddedCardMethods, [.card])
+        XCTAssertEqual(details.directGateways, [.cardCyberSource])
+        XCTAssertEqual(details.directCardSchemes, ["VISA", "MASTERCARD"])
         XCTAssertFalse(details.hasCustomer)
         XCTAssertFalse(details.offersCardSaving)
         XCTAssertFalse(details.isCardVerification)
@@ -87,7 +88,46 @@ final class HesabeTests: XCTestCase {
         XCTAssertTrue(details.hasCustomer)
         XCTAssertTrue(details.offersCardSaving)
         XCTAssertTrue(details.isCardVerification)
-        XCTAssertEqual(details.embeddedCardMethods, [.card])
+        XCTAssertEqual(details.directGateways, [.card])
+    }
+
+    // MARK: - Methods
+
+    func testCardsUseTheFormOnEitherGateway() async throws {
+        let session = try HesabeSession(data: hex)
+        // The sandbox on 27 November 2026: types 2 and 5 enabled, the form on gateway 5.
+        let cyberSource = try await client([(200, try fixture("checkout-details"))]).details(for: session)
+        XCTAssertEqual(cyberSource.offered(from: [.knet, .card, .amex]), [.knet, .card, .amex])
+        XCTAssertTrue(cyberSource.usesCardForm(for: .card))
+        XCTAssertTrue(cyberSource.usesCardForm(for: .cardCyberSource))
+        // American Express is not among the schemes the form lists, and KNET is no card.
+        XCTAssertFalse(cyberSource.usesCardForm(for: .amex))
+        XCTAssertFalse(cyberSource.usesCardForm(for: .knet))
+
+        // The sandbox on 17 November 2026: the form on gateway 2.
+        let mpgs = try await client([(200, try fixture("checkout-details-verify"))]).details(for: session)
+        XCTAssertTrue(mpgs.usesCardForm(for: .card))
+    }
+
+    func testACardTypeStandsForTheOneTheAccountHas() async throws {
+        // The lists a production account answered with on 27 November 2026: cards
+        // through CyberSource, type 5, and no type 2.
+        let answer = try fixture("checkout-details-cybersource")
+        let details = try await client([(200, answer)]).details(for: try HesabeSession(data: hex))
+
+        XCTAssertEqual(details.offered(from: [.knet, .card, .amex]), [.knet, .cardCyberSource])
+        XCTAssertEqual(details.offered(from: [.card, .cardCyberSource]), [.cardCyberSource])
+        // Google Pay is enabled on the account and is never offered.
+        XCTAssertEqual(details.offered(from: [.amex, 16]), [])
+        XCTAssertTrue(details.usesCardForm(for: .cardCyberSource))
+    }
+
+    func testWithoutADirectGatewayACardOpensThePaymentPage() async throws {
+        let answer = Data(#"{"status":true,"response":{"token":"8422173","amount":1,"paymentMethods":[1,2]}}"#.utf8)
+        let details = try await client([(200, answer)]).details(for: try HesabeSession(data: hex))
+
+        XCTAssertEqual(details.offered(from: [.card]), [.card])
+        XCTAssertFalse(details.usesCardForm(for: .card))
     }
 
     // MARK: - Payment page
@@ -148,6 +188,7 @@ final class HesabeTests: XCTestCase {
 
         XCTAssertEqual(transaction.trackID, "300001")
         XCTAssertEqual(transaction.terminal, "000001")
+        XCTAssertEqual(transaction.authCode, "B00400")
         // The sandbox fills the card fields of a KNET payment with "-NA-".
         XCTAssertNil(transaction.cardType)
         XCTAssertNil(transaction.maskedCard)

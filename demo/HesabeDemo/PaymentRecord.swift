@@ -137,10 +137,11 @@ extension PaymentRecord {
         case .checkout, .recovered: break
         }
         // The customer chose in the list or on Hesabe's page. Hesabe's name for the
-        // gateway says which: `KNET` or `MPGS` (sandbox, November 2026).
+        // gateway says which: `KNET`, and `MPGS` or `CYBS` for a card (sandbox,
+        // November 2026).
         switch transaction?.paymentType?.uppercased() {
         case "KNET"?: return .knet
-        case "MPGS"?: return .card
+        case "MPGS"?, "CYBS"?: return .card
         default: return nil
         }
     }
