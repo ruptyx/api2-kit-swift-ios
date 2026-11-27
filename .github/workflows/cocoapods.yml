@@ -38,6 +38,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/frameworks \
             CODE_SIGNING_ALLOWED=NO | tail -4
           ls build/frameworks/Build/Products/Debug-iphonesimulator
+          find . -name Package.resolved -not -path './build/*'
       - name: pod install, static libraries
         run: |
           cd pods-check

@@ -5,7 +5,8 @@ options:
     iOS: "15.0"
 packages:
   Hesabe:
-    path: ..
+    url: https://github.com/ruptyx/api2-kit-swift-ios
+    branch: feat/loaders-and-result-screen
 targets:
   PodsCheck:
     type: application
