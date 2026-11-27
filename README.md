@@ -13,6 +13,10 @@ sandbox from Xcode with nothing else to start: one file in it stands in for your
 [`hosting/apple-pay.html`](hosting/apple-pay.html) is the page behind the Apple Pay
 button, the one file that is hosted.
 
+[`docs/INTEGRATION.md`](docs/INTEGRATION.md) is the integration guide, with every use
+case and its code. [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) explains what happens
+at each step of a payment.
+
 Status, 27 November 2026: every Hesabe call the SDK makes was run against the sandbox.
 The package and the demo app are compiled, and the package unit tested, by GitHub
 Actions. The demo as it is here was driven by a UI test on an iPhone 16 simulator in
@@ -89,6 +93,10 @@ browser. Hesabe's payment page appears.
 
 In Xcode, choose File, Add Package Dependencies, enter this repository's URL, and add the
 `HesabeUI` product to your app target.
+
+There is no podspec. A project that uses CocoaPods adds the same Swift package to its app
+project, beside its pods: the
+[integration guide](docs/INTEGRATION.md#in-a-project-that-uses-cocoapods) has the steps.
 
 Check: `import HesabeUI` compiles.
 

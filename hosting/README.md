@@ -13,7 +13,12 @@ button.
   never send to a server.
 - Hesabe's Apple Pay script is pinned by version and checked with an integrity hash.
 
-Set the address the page is served from as `applePayPageURL` in `HesabeConfiguration`:
+You host it, on the domain Hesabe has registered with Apple for your account. The
+[integration guide](../docs/INTEGRATION.md#add-the-apple-pay-button) has the steps, with
+the domain association file.
+
+Give the address the page is served from to `HesabeConfiguration`, as
+`applePayPageURL`:
 
 ```swift
 configuration.applePayPageURL = URL(string: "https://example.com/apple-pay.html")!
