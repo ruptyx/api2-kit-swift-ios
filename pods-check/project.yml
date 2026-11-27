@@ -1,0 +1,22 @@
+name: PodsCheck
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "15.0"
+packages:
+  Hesabe:
+    path: ..
+targets:
+  PodsCheck:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: Hesabe
+        product: HesabeUI
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"

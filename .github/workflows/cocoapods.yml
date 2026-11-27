@@ -1,0 +1,60 @@
+name: CocoaPods project with the Swift package
+
+on:
+  push:
+
+jobs:
+  pods:
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          echo "CocoaPods $(pod --version)"
+      - name: Generate an app project that depends on the package
+        run: |
+          brew install xcodegen
+          cd pods-check
+          xcodegen generate
+          grep -c "XCSwiftPackageProductDependency" PodsCheck.xcodeproj/project.pbxproj
+          grep -E "objectVersion" PodsCheck.xcodeproj/project.pbxproj
+      - name: pod install, with use_frameworks!
+        run: |
+          cd pods-check
+          printf "platform :ios, '15.0'\nuse_frameworks!\n\ntarget 'PodsCheck' do\n  pod 'SwiftyJSON', '~> 5.0'\nend\n" > Podfile
+          cat Podfile
+          pod install
+          echo "package references after pod install: $(grep -c "XCSwiftPackageProductDependency" PodsCheck.xcodeproj/project.pbxproj)"
+      - name: Build the workspace, with use_frameworks!
+        run: |
+          set -o pipefail
+          cd pods-check
+          xcodebuild build -workspace PodsCheck.xcworkspace -scheme PodsCheck -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/frameworks \
+            CODE_SIGNING_ALLOWED=NO | tail -4
+          ls build/frameworks/Build/Products/Debug-iphonesimulator
+      - name: pod install, static libraries
+        run: |
+          cd pods-check
+          printf "platform :ios, '15.0'\n\ntarget 'PodsCheck' do\n  pod 'SwiftyJSON', '~> 5.0'\nend\n" > Podfile
+          cat Podfile
+          pod install
+          echo "package references after the second pod install: $(grep -c "XCSwiftPackageProductDependency" PodsCheck.xcodeproj/project.pbxproj)"
+      - name: Build the workspace, static libraries
+        run: |
+          set -o pipefail
+          cd pods-check
+          xcodebuild build -workspace PodsCheck.xcworkspace -scheme PodsCheck -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/static \
+            CODE_SIGNING_ALLOWED=NO | tail -4
+          ls build/static/Build/Products/Debug-iphonesimulator
+      - name: pod deintegrate keeps the package
+        run: |
+          cd pods-check
+          pod deintegrate
+          echo "package references after pod deintegrate: $(grep -c "XCSwiftPackageProductDependency" PodsCheck.xcodeproj/project.pbxproj)"
