@@ -322,6 +322,7 @@ final class Demo {
             return
         }
         let seen = Date().timeIntervalSince(start)
+        shot("loader")
         var drawn: TimeInterval?
         while loader.exists, Date().timeIntervalSince(start) < 90 {
             if drawn == nil, content.exists { drawn = Date().timeIntervalSince(start) }
