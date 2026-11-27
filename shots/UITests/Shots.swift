@@ -182,7 +182,9 @@ final class Shots: XCTestCase {
         }
         demo.shot("confirm-charge")
         pay.tap()
-        _ = demo.result("charged")
+        guard demo.result("charged") else { return }
+        demo.backHome()
+        demo.removeSavedCard()
     }
 
     @MainActor
@@ -208,6 +210,74 @@ final class Shots: XCTestCase {
         demo.shot("after-cancel")
         demo.dump("after-cancel")
         _ = demo.result("canceled")
+    }
+
+    @MainActor
+    func test8SaveWhilePaying() {
+        let demo = Demo("8-save-while-paying")
+        let offer = demo.app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "Offer to save")).firstMatch
+        guard offer.waitForExistence(timeout: 10) else {
+            XCTFail("no \"Offer to save the card\" switch")
+            demo.dump("no-offer-switch")
+            return
+        }
+        // The row's label takes no taps: the switch itself is at its trailing edge.
+        offer.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        demo.pause(1)
+        if (offer.value as? String) != "1" { offer.tap() }
+        demo.pause(1)
+        demo.shot("offer-on")
+        guard (offer.value as? String) == "1" else {
+            XCTFail("the switch did not turn on")
+            demo.dump("offer-not-on")
+            return
+        }
+
+        guard let web = demo.openCardForm() else { return }
+        demo.shot("form")
+        demo.dump("form")
+        demo.fillCard(in: web, expiry: "01/39")
+        let consent = web.switches.firstMatch
+        guard consent.exists else {
+            XCTFail("the card form does not offer to save the card")
+            demo.dump("no-consent")
+            return
+        }
+        consent.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.5)).tap()
+        demo.pause(1)
+        if (consent.value as? String) != "1" { consent.tap() }
+        demo.pause(1)
+        demo.shot("filled")
+        demo.dump("filled")
+        guard demo.tapPay(in: web), demo.result("paid") else { return }
+
+        demo.backHome()
+        let card = demo.app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "0008")).firstMatch
+        for _ in 0..<5 where !(card.exists && card.isHittable) {
+            demo.app.swipeUp()
+            demo.pause(1)
+        }
+        demo.shot("home-with-card")
+        guard card.exists else {
+            XCTFail("the card paid with is not in the saved cards")
+            demo.dump("card-not-saved")
+            return
+        }
+        demo.removeSavedCard()
+    }
+
+    @MainActor
+    func test9Declined() {
+        let demo = Demo("9-declined")
+        guard let web = demo.openCardForm() else { return }
+        // On the MPGS test gateway expiry 05/39 is a declined card.
+        demo.fillCard(in: web, expiry: "05/39")
+        demo.shot("filled")
+        guard demo.tapPay(in: web) else { return }
+        demo.pause(8)
+        demo.shot("after-pay")
+        demo.dump("after-pay")
+        _ = demo.result("declined")
     }
 }
 
@@ -357,5 +427,81 @@ final class Demo {
         app.navigationBars["Result"].buttons.firstMatch.tap()
         _ = app.navigationBars["Hesabe Demo"].waitForExistence(timeout: 20)
         pause(3)
+    }
+
+    /// Opens the card form from the "Card" button and waits for its fields.
+    func openCardForm() -> XCUIElement? {
+        guard tap("Card") else { return nil }
+        let web = app.webViews.firstMatch
+        guard web.textFields.firstMatch.waitForExistence(timeout: 90) else {
+            XCTFail("the card form did not open")
+            shot("no-form")
+            dump("no-form")
+            return nil
+        }
+        pause(2)
+        return web
+    }
+
+    /// Types the sandbox test card into Hesabe's card form.
+    func fillCard(in web: XCUIElement, expiry: String) {
+        type("Demo Customer", into: field(in: web, "Cardholder name"), "name on card")
+        type("5123450000000008", into: field(in: web, "Card number"), "card number")
+        type(expiry, into: field(in: web, "Expiry"), "expiry")
+        type("100", into: web.secureTextFields.firstMatch, "security code")
+        dismissKeyboard()
+    }
+
+    /// Taps the card form's own pay button.
+    func tapPay(in web: XCUIElement) -> Bool {
+        let pay = web.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "pay")).firstMatch
+        guard pay.waitForExistence(timeout: 10) else {
+            XCTFail("no Pay button")
+            dump("no-pay-button")
+            return false
+        }
+        pay.tap()
+        return true
+    }
+
+    /// Removes the saved card through Edit, Remove and the confirmation, and waits for
+    /// its row to go.
+    func removeSavedCard() {
+        let edit = app.buttons["Edit"]
+        for _ in 0..<5 where !(edit.exists && edit.isHittable) {
+            app.swipeUp()
+            pause(1)
+        }
+        guard edit.exists else {
+            XCTFail("no Edit button over the saved cards")
+            dump("no-edit")
+            return
+        }
+        edit.tap()
+        let remove = app.buttons["Remove"]
+        guard remove.waitForExistence(timeout: 10) else {
+            XCTFail("no Remove button on the card")
+            dump("no-remove")
+            return
+        }
+        pause(1)
+        shot("editing-cards")
+        remove.tap()
+        let confirm = app.buttons["Remove card"]
+        guard confirm.waitForExistence(timeout: 10) else {
+            XCTFail("no confirmation before the removal")
+            dump("no-removal-confirmation")
+            return
+        }
+        pause(1)
+        shot("confirm-removal")
+        confirm.tap()
+        let empty = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "No saved cards yet")).firstMatch
+        if !empty.waitForExistence(timeout: 60) {
+            XCTFail("the card is still listed")
+            dump("card-not-removed")
+        }
+        pause(2)
+        shot("card-removed")
     }
 }
