@@ -13,21 +13,20 @@ sandbox from Xcode with nothing else to start: one file in it stands in for your
 [`hosting/apple-pay.html`](hosting/apple-pay.html) is the page behind the Apple Pay
 button, the one file that is hosted.
 
-Status, November 2026: every Hesabe call the SDK makes was run against the sandbox. The
-package and the demo app are compiled, and the package unit tested, by GitHub Actions.
-An earlier version of the demo, with the keys in a small server beside it, ran on an iOS
-simulator against the sandbox: a KNET payment, a card payment in the card form with 3-D
-Secure, a payment that saves the card, a card saved without a charge, a charge on a saved
-card, and removing a card. A declined card was run in the card form in a desktop browser
-presenting itself as an iPhone web view. The Apple Pay button has not been run yet, and
-nothing has been run on an iPhone.
+Status, 27 November 2026: every Hesabe call the SDK makes was run against the sandbox.
+The package and the demo app are compiled, and the package unit tested, by GitHub
+Actions. The demo as it is here was driven by a UI test on an iPhone 16 simulator in
+GitHub Actions, against the sandbox: a KNET payment, a card payment in the card form, a
+card saved without a charge, a charge on that saved card, a cancelled payment, the method
+list and the Indirect Method page. Each payment ended on the result screen with the
+server's own confirmation beside the SDK's.
 
-Newer than those runs, compiled by GitHub Actions and not yet run on a simulator: the
-sheet's loaders and logos, the demo's result screen, payment history and saved-card
-confirmations, and the demo creating its own sessions. The code that creates them was
-run on a Mac by GitHub Actions against the sandbox on 25 November 2026: a session, a
-session that offers to save the card, a session that saves one, the customer, the card
-list, the lookup of an unpaid session and a charge Hesabe refused.
+Run only on an earlier version of the demo, on a simulator on 17 November 2026: a card
+payment through a 3-D Secure challenge page, a payment that saves the card, and removing
+a card. A declined card was run in the card form in a desktop browser presenting itself
+as an iPhone web view.
+
+The Apple Pay button has not been run yet, and nothing has been run on an iPhone.
 
 ## What you need before starting
 
@@ -37,8 +36,9 @@ list, the lookup of an unpaid session and a charge Hesabe refused.
 2. A server endpoint that calls Hesabe's Checkout API. Step 1 describes it.
 3. For cards in the embedded form and for saved cards: the Direct Method enabled on your
    account (email support@hesabe.com).
-4. For the Apple Pay button: Apple Pay enabled on your account (email support@hesabe.com)
-   and the address of the hosted button page.
+4. For the Apple Pay button: Apple Pay enabled on your account (email support@hesabe.com),
+   and a domain of yours that Hesabe has registered with Apple (email
+   itsupport@hesabe.com), where you host [`hosting/apple-pay.html`](hosting/apple-pay.html).
 5. Xcode 16 or later. The SDK supports iOS 15 and later.
 
 ## Step 1. Create the session on your server
@@ -229,9 +229,14 @@ view the size of the button. The page is the same file for every payment and hol
 keys. The payment's settings travel in the URL fragment, which browsers never send to a
 server.
 
+You host the page, on the domain Hesabe registered with Apple for your account. Each
+Apple Pay payment type has its own registration: on a production account in November
+2026 the same domain was accepted for type `11` and refused for type `13`.
+
 An earlier version of this page took a production payment in September 2026, from a
-merchant's own domain and with an embedded session. It has not been run with a plain
-session, or from a page hosted by Hesabe, yet.
+merchant's own domain and with an embedded session. With the plain session from Step 1,
+Hesabe answered the page's merchant validation with a valid Apple session on production
+on 27 November 2026. A payment has not been made with a plain session yet.
 
 ## Step 6. Save cards and charge them later
 
