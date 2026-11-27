@@ -12,10 +12,14 @@ public struct PaymentMethod: RawRepresentable, Sendable, Hashable, Codable,
     public init(integerLiteral value: Int) { self.rawValue = value }
 
     public static let knet: PaymentMethod = 1
-    /// Visa and Mastercard through MPGS.
+    /// Visa and Mastercard. The id is the MPGS one. On an account whose cards go through
+    /// CyberSource the checkout sheet offers type 5 for it: see
+    /// `CheckoutDetails.offered(from:)`.
     public static let card: PaymentMethod = 2
     /// Visa and Mastercard through CyberSource.
     public static let cardCyberSource: PaymentMethod = 5
+    /// American Express. On an account that has type 8 and not 7, the checkout sheet
+    /// offers 8 for it.
     public static let amex: PaymentMethod = 7
     /// American Express through MPGS.
     public static let amexMPGS: PaymentMethod = 8
@@ -27,6 +31,25 @@ public struct PaymentMethod: RawRepresentable, Sendable, Hashable, Codable,
     public static let applePayAmex: PaymentMethod = 14
     public static let deema: PaymentMethod = 18
     public static let samsungPay: PaymentMethod = 20
+
+    /// True for the four card types, which Hesabe's Direct Method takes: 2 and 5 are
+    /// Visa and Mastercard, 7 and 8 are American Express.
+    public var isCard: Bool { [2, 5, 7, 8].contains(rawValue) }
+
+    /// True for the two American Express types, 7 and 8.
+    public var isAmex: Bool { rawValue == 7 || rawValue == 8 }
+
+    /// The payment type for the same cards on Hesabe's other card gateway: 2 and 5 are
+    /// one pair, 7 and 8 the other. `nil` for every method that is not a card.
+    var sameCardsOnOtherGateway: PaymentMethod? {
+        switch rawValue {
+        case 2: return .cardCyberSource
+        case 5: return .card
+        case 7: return .amexMPGS
+        case 8: return .amex
+        default: return nil
+        }
+    }
 
     /// True for the six Apple Pay types, 9 to 14.
     public var isApplePay: Bool { (9...14).contains(rawValue) }

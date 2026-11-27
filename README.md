@@ -35,8 +35,8 @@ list, the lookup of an unpaid session and a charge Hesabe refused.
    merchant code, access code, secret key (32 characters), IV key (16 characters). They go
    on your server, never in the app.
 2. A server endpoint that calls Hesabe's Checkout API. Step 1 describes it.
-3. For cards in the embedded form and for saved cards: Direct Payment (MPGS) enabled on
-   your account (email support@hesabe.com).
+3. For cards in the embedded form and for saved cards: the Direct Method enabled on your
+   account (email support@hesabe.com).
 4. For the Apple Pay button: Apple Pay enabled on your account (email support@hesabe.com)
    and the address of the hosted button page.
 5. Xcode 16 or later. The SDK supports iOS 15 and later.
@@ -142,9 +142,14 @@ In SwiftUI:
 | several, `[.knet, .card, .amex]` | A native list of those enabled on your account, each with its logo, then the chosen method. |
 | none | Hesabe's Indirect Method: its own hosted page, where the customer chooses among every enabled method. |
 
-A payment method is Hesabe's payment type id: `.knet` is 1, `.card` is 2 (MPGS), `.amex`
-is 7. Any other id works as `PaymentMethod(rawValue: 18)`. Google Pay, type 16, is not
-part of the iOS SDK: the method list never offers it.
+A payment method is Hesabe's payment type id: `.knet` is 1, `.card` is 2, `.amex` is 7.
+Any other id works as `PaymentMethod(rawValue: 18)`. Google Pay, type 16, is not part of
+the iOS SDK: the method list never offers it.
+
+Hesabe has one card type per card gateway: 2 is Visa and Mastercard through MPGS, and 5
+is the same cards through CyberSource. Which one an account has is Hesabe's setting, so
+`.card` means Visa and Mastercard on either. On an account with 5 and not 2, the sheet
+offers 5 for it. `.amex`, type 7, stands for type 8 the same way.
 
 The logos are Hesabe's own, fetched from Hesabe's assets bucket by payment type id
 (`PaymentMethod.logoURL`) and drawn on a white badge. For your own buttons and rows,
@@ -160,8 +165,10 @@ button. The texts are in `HesabeStrings`, in English and Arabic.
 
 The card form is Hesabe's page at `pay/webview`, shown in the sheet under your app's own
 title bar. The card number is typed into Hesabe's page and sent by it to Hesabe: it never
-passes through your app's code or your server. A card type the form does not take for
-the session opens Hesabe's payment page instead.
+passes through your app's code or your server. The sheet shows the form for a card on
+every account with the Direct Method. American Express opens Hesabe's payment page until
+the form lists it for the account, and so does every card on an account without the
+Direct Method.
 
 Check: on the sandbox, pay with KNET test card `8888880000000001`, expiry `09/30`, PIN
 `1234`. The sheet shows "Payment complete" and returns `.paid`. Then pay with `[.card]`
@@ -412,6 +419,9 @@ The Hesabe calls, as run on the sandbox in November 2026:
   because an iPad web view asks for desktop pages by default and gets HTTP 403.
 - The card form works with the plain session from Step 1. `channel` and `paymentType` 2
   are not needed for it.
+- The card gateway behind the form is Hesabe's setting, and it can change: the sandbox's
+  moved from MPGS to CyberSource between 17 and 26 November 2026. The SDK reads it from
+  the session, so pass `.card` and build nothing on the gateway's id.
 - A saved-card charge is one request with no page. Your server sends it once and never
   retries it: Hesabe has no idempotency keys.
 - The SDK injects no script into its web views. WebKit turns Apple Pay off in a web view

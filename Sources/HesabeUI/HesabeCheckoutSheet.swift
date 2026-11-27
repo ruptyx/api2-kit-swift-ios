@@ -64,9 +64,7 @@ public final class HesabeCheckoutSheet {
         }
 
         // A session that only saves a card has one way through: the card form.
-        let offered = details.isCardVerification
-            ? []
-            : methods.filter { details.paymentMethods.contains($0) && !$0.isGooglePay }
+        let offered = details.isCardVerification ? [] : details.offered(from: methods)
         if !details.isCardVerification, !methods.isEmpty, offered.isEmpty {
             await dismiss(navigation)
             return .notStarted(.configuration("none of the requested payment methods is enabled for this session"))
@@ -93,10 +91,10 @@ public final class HesabeCheckoutSheet {
         HesabePendingPayments.track(
             PendingPayment(token: details.token, environment: configuration.environment))
 
-        // Cards go to Hesabe's embedded form. Every other method, and a card type the
-        // form does not take for this session, goes to Hesabe's payment page.
+        // Cards go to Hesabe's embedded form. Every other method, and a card the form
+        // does not take on this account, goes to Hesabe's payment page.
         let usesCardForm = details.isCardVerification
-            || (method.map(details.embeddedCardMethods.contains) ?? false)
+            || (method.map { details.usesCardForm(for: $0) } ?? false)
         let page = PaymentWebViewController(
             pageURL: usesCardForm
                 ? client.cardFormURL(for: session, language: strings.languageCode)
