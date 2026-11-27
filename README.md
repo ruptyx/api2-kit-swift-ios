@@ -189,9 +189,9 @@ declined and returns `.failed`.
 
 `.paid`, `.cardSaved`, `.failed` and `.pending` carry Hesabe's record of the payment as a
 `HesabeTransaction`: the status, amount, order reference, payment and transaction ids,
-track id, terminal and Hesabe's own date. Its `rawJSON` is the whole record for a
-developer to read. It includes the customer's name, email and mobile number, so keep it
-out of logs.
+track id, terminal, authorisation code and Hesabe's own date. Its `rawJSON` is the whole
+record for a developer to read. It includes the customer's name, email and mobile number,
+so keep it out of logs.
 
 ## Step 5. Add the Apple Pay button
 

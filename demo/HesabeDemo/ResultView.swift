@@ -89,7 +89,7 @@ struct ResultView: View {
         [
             Detail("Status", record.transaction?.status),
             Detail("Result code", record.charge?.status),
-            Detail("Auth code", record.charge?.auth),
+            Detail("Auth code", record.transaction?.authCode ?? record.charge?.auth),
             Detail("Track ID", record.transaction?.trackID ?? record.charge?.trackId),
             Detail("Terminal", record.transaction?.terminal),
             Detail("Card type", record.transaction?.cardType),

@@ -188,6 +188,7 @@ final class HesabeTests: XCTestCase {
 
         XCTAssertEqual(transaction.trackID, "300001")
         XCTAssertEqual(transaction.terminal, "000001")
+        XCTAssertEqual(transaction.authCode, "B00400")
         // The sandbox fills the card fields of a KNET payment with "-NA-".
         XCTAssertNil(transaction.cardType)
         XCTAssertNil(transaction.maskedCard)

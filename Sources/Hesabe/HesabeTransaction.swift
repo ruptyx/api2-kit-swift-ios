@@ -19,6 +19,9 @@ public struct HesabeTransaction: Sendable, Hashable, Codable {
     public let trackID: String?
     /// The gateway terminal that took the payment.
     public let terminal: String?
+    /// The authorisation code the bank gave the payment, when Hesabe reports one:
+    /// `B00400` for a KNET payment (sandbox, November 2026).
+    public let authCode: String?
     /// Hesabe's name for the method used, for example `KNET`.
     public let paymentType: String?
     /// The card scheme, when Hesabe reports one. The sandbox writes `-NA-` for KNET and
@@ -62,6 +65,7 @@ public struct HesabeTransaction: Sendable, Hashable, Codable {
         case transactionID = "TransactionID"
         case trackID = "TrackID"
         case terminal = "Terminal"
+        case authCode = "auth_code"
         case paymentType = "payment_type"
         case cardType = "customerCardType"
         case maskedCard = "customerCard"
@@ -77,6 +81,7 @@ public struct HesabeTransaction: Sendable, Hashable, Codable {
         transactionID = Self.text(container, .transactionID)
         trackID = Self.text(container, .trackID)
         terminal = Self.text(container, .terminal)
+        authCode = Self.text(container, .authCode)
         paymentType = Self.text(container, .paymentType)
         cardType = Self.text(container, .cardType).flatMap(Self.unlessNotApplicable)
         maskedCard = Self.text(container, .maskedCard).flatMap(Self.unlessNotApplicable)
